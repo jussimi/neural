@@ -1,4 +1,4 @@
-import { ActivationFN } from "./functions";
+import { ActivationFN } from "./activation";
 import { Vector, Matrix } from "./Matrix";
 
 export type LayerComputationResult = {

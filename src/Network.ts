@@ -1,16 +1,18 @@
-import { ErrorFN, Identity } from "./functions";
+import { Identity } from "./activation";
+import { ErrorFN } from "./error";
 import { Layer, LayerComputationResult } from "./Layer";
-import { Vector, Matrix } from "./Matrix";
+import { Matrix, Vector } from "./Matrix";
 import { Optimizer } from "./Optimizer";
 
+export type DataSet = [Vector, Vector][];
 export class Network {
   error: ErrorFN;
-  dataset: [Vector, Vector][];
+  dataset: DataSet;
   optimizer: Optimizer;
   layers: Layer[];
 
   constructor(
-    dataset: [Vector, Vector][],
+    dataset: DataSet,
     error: ErrorFN,
     optimizer: Optimizer,
     layers: Layer[]
@@ -22,6 +24,10 @@ export class Network {
     this.layers = layers;
   }
 
+  setData = (dataset: DataSet) => {
+    this.dataset = dataset;
+  };
+
   optimize = () => {
     const computeGradients = () => {
       const result = this.computeGradient();
@@ -30,7 +36,7 @@ export class Network {
         loss: result.loss,
       };
     };
-    this.optimizer.optimize(this.layers, computeGradients);
+    this.optimizer.optimize(this, computeGradients);
   };
 
   computeGradient = () => {

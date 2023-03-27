@@ -1,4 +1,4 @@
-import { Vector, Scalar } from "./Matrix";
+import { Vector } from "./Matrix";
 
 export type ScalarActivationFN = {
   forward: (x: number) => number;
@@ -40,28 +40,23 @@ export const Sigmoid: ActivationFN = {
   backward: (x) => activate(ScalarSigmoid.backward, x),
 };
 
+export const Softmax: ActivationFN = {
+  forward: (input, isOutput) => {
+    const sum = input.rows.reduce((s, x) => s + Math.exp(x[0]), 0);
+    const result = input.map((x) => x / sum);
+    if (!isOutput) {
+      result.rows.unshift([1]);
+    }
+    return result;
+  },
+  backward: (x) => {
+    return x;
+  },
+};
+
 export const Identity: ActivationFN = {
   forward: (x, isOutput) => activate((x) => x, x, !isOutput),
   backward: (x) => activate((x) => x, x),
-};
-
-export type ErrorFN = {
-  loss: (output: Vector, expected: Vector) => number;
-  grad: (output: Vector, expected: Vector) => Vector;
-};
-
-export const LogLoss: ErrorFN = {
-  loss: (output, expected) => {
-    const t = output.get();
-    const y = expected.get();
-    return -(y * Math.log(t) + (1 - y) * Math.log(1 - t));
-  },
-  grad: (output, expected) => {
-    const t = output.get();
-    const y = expected.get();
-    const result = (t - y) / (t - t * t);
-    return new Scalar(result);
-  },
 };
 
 function SigmoidFn(x: number) {

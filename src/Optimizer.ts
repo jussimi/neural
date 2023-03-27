@@ -1,39 +1,72 @@
 import { Matrix } from "./Matrix";
 import { Layer } from "./Layer";
+import { Network } from "./Network";
 
-export interface Optimizer {
+type OptimizationState = { loss: number; gradients: Matrix[] };
+type OptimizerOptionFN<T> = (
+  network: Network,
+  payload: OptimizationState,
+  iteration: number
+) => T;
+
+type OptimizerOptions = {
+  beforeIteration?: OptimizerOptionFN<void>;
+  afterIteration?: OptimizerOptionFN<void>;
+  stopCondition?: OptimizerOptionFN<boolean>;
+};
+
+export type Optimizer = {
   optimize: (
-    layers: Layer[],
-    computeGradients: () => { loss: number; gradients: Matrix[] }
+    network: Network,
+    computeGradients: () => OptimizationState
   ) => void;
-}
+} & OptimizerOptions;
 
 type LearningRate = number | ((iteration: number) => number);
 export class GradientDescentOptimizer implements Optimizer {
   learningRate: LearningRate;
   iterations: number;
 
-  constructor(learningRate: LearningRate, iterations: number) {
+  beforeIteration: OptimizerOptions["beforeIteration"];
+  afterIteration: OptimizerOptions["afterIteration"];
+  stopCondition: OptimizerOptions["stopCondition"];
+
+  constructor(
+    learningRate: LearningRate,
+    iterations: number,
+    options: OptimizerOptions = {}
+  ) {
     this.learningRate = learningRate;
     this.iterations = iterations;
+
+    this.beforeIteration = options.beforeIteration;
+    this.afterIteration = options.afterIteration;
+    this.stopCondition = options.stopCondition;
   }
 
-  optimize: Optimizer["optimize"] = (layers: Layer[], computeGradients) => {
+  optimize: Optimizer["optimize"] = (network: Network, computeGradients) => {
     for (let i = 0; i < this.iterations; i += 1) {
-      const { gradients, loss } = computeGradients();
+      const data = computeGradients();
+      const { gradients, loss } = data;
 
-      console.log("Iteration: ", i);
-      console.log("   - loss: ", loss);
+      if (this.stopCondition?.(network, data, i)) {
+        break;
+      }
+
+      this.beforeIteration?.(network, data, i);
 
       const lr =
         typeof this.learningRate === "function"
           ? this.learningRate(i)
           : this.learningRate;
-      layers.forEach((layer, i) => {
+      network.layers.forEach((layer, i) => {
         const weights = layer.weights.sum(gradients[i].scale(-lr));
         layer.weights = weights;
       });
+
+      this.afterIteration?.(network, data, i);
     }
+
     console.log("\n");
   };
 }
