@@ -1,7 +1,17 @@
 import { Identity } from "./activation";
 import { ErrorFN } from "./error";
 import { Layer, LayerComputationResult } from "./Layer";
-import { Matrix, Vector } from "./Matrix";
+import {
+  hadamard,
+  mapMatrix,
+  Matrix,
+  multiply,
+  omit,
+  scale,
+  sum,
+  transpose,
+  Vector,
+} from "./Matrix";
 import { Optimizer } from "./Optimizer";
 
 export type DataSet = [Vector, Vector][];
@@ -41,17 +51,17 @@ export class Network {
 
   computeGradient = () => {
     // Initialize empty weight-matrices.
-    const totalGradient = this.layers.map((layer) => layer.weights.scale(0));
+    const totalGradient = this.layers.map((layer) => scale(layer.weights, 0));
     let totalLoss = 0;
 
     const results = this.dataset.map(([input, output]) => {
       const result = this.computeResult(input, output);
 
       // Calculate total-loss and total-gradient.
-      const scale = 1 / this.dataset.length;
-      totalLoss += result.loss * scale;
+      const avg = 1 / this.dataset.length;
+      totalLoss += result.loss * avg;
       result.gradients.forEach((grads, i) => {
-        totalGradient[i] = totalGradient[i].sum(grads.scale(scale));
+        totalGradient[i] = sum(totalGradient[i], scale(grads, avg));
       });
 
       return {
@@ -108,22 +118,26 @@ export class Network {
   ) => {
     const resultOut = results[results.length - 1];
 
-    const deltaOut = this.error
-      .grad(resultOut.activated, output)
-      .hadamard(resultOut.gradient);
+    const deltaOut = hadamard(
+      this.error.grad(resultOut.activated, output),
+      resultOut.gradient
+    );
 
     let deltas = [deltaOut];
     for (let i = this.layers.length - 2; i >= 0; i -= 1) {
       const result = results[i];
-      const weights = this.layers[i + 1].weights.omit(0).transpose();
-      const delta = weights.multiply(deltas[0]).hadamard(result.gradient); // delta^(l+1) = deltas[0]
+      const weights = transpose(omit(this.layers[i + 1].weights, 0));
+      const delta = hadamard(multiply(weights, deltas[0]), result.gradient); // delta^(l+1) = deltas[0]
       deltas.unshift(delta);
     }
 
     return this.layers.map((layer, l) => {
       const activations = l === 0 ? input : results[l - 1].activated;
       const delta = deltas[l];
-      return layer.weights.map((_, i, j) => delta.get(i) * activations.get(j));
+      return mapMatrix(
+        layer.weights,
+        (_, i, j) => delta[i][0] * activations[j][0]
+      );
     });
   };
 
@@ -135,7 +149,7 @@ export class Network {
     }
 
     // First dimension is based on the first input of the dataset.
-    let currentDimension = this.dataset[0][0].rows.length;
+    let currentDimension = this.dataset[0][0].length;
     this.layers.map((layer, l) => {
       const m = layer.neuronCount;
       const n = currentDimension + 1;
@@ -144,7 +158,7 @@ export class Network {
 
       let w = weights?.[l];
       if (w) {
-        if (w.rows.length !== m || w.rows[0].length !== n) {
+        if (w.length !== m || w[0].length !== n) {
           throw new Error(
             `Invalid weight dimension at layer ${l}. Should be ${m}x${n}.`
           );
@@ -166,5 +180,5 @@ function randomWeights(m: number, n: number) {
     }
     result.push(row);
   }
-  return new Matrix(result);
+  return result;
 }

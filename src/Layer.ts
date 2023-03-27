@@ -1,5 +1,5 @@
 import { ActivationFN } from "./activation";
-import { Vector, Matrix } from "./Matrix";
+import { Vector, Matrix, multiply } from "./Matrix";
 
 export type LayerComputationResult = {
   /**
@@ -21,7 +21,7 @@ export class Layer {
 
   neuronCount: number;
 
-  weights: Matrix = new Matrix([[]]);
+  weights: Matrix = [[]];
 
   activation: ActivationFN;
 
@@ -31,7 +31,7 @@ export class Layer {
   }
 
   computeResult = (input: Vector): LayerComputationResult => {
-    const sum = this.weights.multiply(input);
+    const sum = multiply(this.weights, input);
     const activated = this.activation.forward(sum, this.isOutput);
     const gradient = this.activation.backward(sum);
 

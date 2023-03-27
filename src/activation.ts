@@ -1,4 +1,4 @@
-import { Vector } from "./Matrix";
+import { Vector, mapMatrix } from "./Matrix";
 
 export type ScalarActivationFN = {
   forward: (x: number) => number;
@@ -42,10 +42,10 @@ export const Sigmoid: ActivationFN = {
 
 export const Softmax: ActivationFN = {
   forward: (input, isOutput) => {
-    const sum = input.rows.reduce((s, x) => s + Math.exp(x[0]), 0);
-    const result = input.map((x) => x / sum);
+    const sum = input.reduce((s, x) => s + Math.exp(x[0]), 0);
+    const result = mapMatrix(input, (x) => x / sum);
     if (!isOutput) {
-      result.rows.unshift([1]);
+      result.unshift([1]);
     }
     return result;
   },
@@ -73,9 +73,9 @@ function activate(
   input: Vector,
   appendBias = false
 ) {
-  const vect = input.map((x) => fn(x));
+  const vect = mapMatrix(input, (x) => fn(x));
   if (appendBias) {
-    vect.rows.unshift([1]);
+    vect.unshift([1]);
   }
   return vect;
 }
