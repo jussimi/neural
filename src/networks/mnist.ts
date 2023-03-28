@@ -20,7 +20,7 @@ const runMnist = () => {
     .toString()
     .split("\n");
 
-  const batchSize = 50;
+  const batchSize = 200;
   const labelSize = 10;
 
   const generateBatch = (i: number): DataSet => {
@@ -28,7 +28,7 @@ const runMnist = () => {
       .slice(i * batchSize, i * batchSize + batchSize)
       .map((row) => {
         const items = row.split(",").map((i) => parseInt(i));
-        const label = oneHotEncode(items.shift() as number, labelSize);
+        const label = [[items.shift() as number]]; //oneHotEncode(items.shift() as number, labelSize);
         const point = fromVect(items);
         return [point, label] as [Vector, Vector];
       });
@@ -50,7 +50,7 @@ const runMnist = () => {
 
   const l1 = new Layer(ReLu, 512);
   const l2 = new Layer(ReLu, 512);
-  const l3 = new Layer(Sigmoid, labelSize);
+  const l3 = new Layer(Sigmoid, 1);
 
   const network = new Network(generateBatch(0), MSELoss, gd, [l1, l2, l3]);
 

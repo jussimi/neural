@@ -3,12 +3,10 @@ import { ErrorFN } from "./error";
 import { Layer, LayerComputationResult } from "./Layer";
 import {
   hadamard,
-  mapMatrix,
   Matrix,
   multiply,
   omit,
   scale,
-  sum,
   transpose,
   Vector,
 } from "./Matrix";
@@ -55,14 +53,11 @@ export class Network {
     let totalLoss = 0;
 
     const results = this.dataset.map(([input, output]) => {
-      const result = this.computeResult(input, output);
+      const result = this.computeResult(input, output, totalGradient);
 
       // Calculate total-loss and total-gradient.
       const avg = 1 / this.dataset.length;
       totalLoss += result.loss * avg;
-      result.gradients.forEach((grads, i) => {
-        totalGradient[i] = sum(totalGradient[i], scale(grads, avg));
-      });
 
       return {
         input,
@@ -78,7 +73,7 @@ export class Network {
     };
   };
 
-  computeResult = (realInput: Vector, output: Vector) => {
+  computeResult = (realInput: Vector, output: Vector, total: Matrix[]) => {
     // Adds constant 1 to input. Grows dimension by 1 to account for bias term in weight-matrice.
     const input = Identity.forward(realInput, false);
 
@@ -86,11 +81,10 @@ export class Network {
     const results = this.forwardPass(input);
 
     // Backropagate
-    const gradients = this.backwardPass(input, output, results);
+    this.backwardPass(input, output, results, total);
 
     const estimate = results[results.length - 1].activated;
     return {
-      gradients,
       estimate: estimate,
       loss: this.error.loss(estimate, output),
     };
@@ -114,7 +108,8 @@ export class Network {
   backwardPass = (
     input: Vector,
     output: Vector,
-    results: LayerComputationResult[]
+    results: LayerComputationResult[],
+    total: Matrix[]
   ) => {
     const resultOut = results[results.length - 1];
 
@@ -131,13 +126,15 @@ export class Network {
       deltas.unshift(delta);
     }
 
-    return this.layers.map((layer, l) => {
+    total.forEach((weights, l) => {
       const activations = l === 0 ? input : results[l - 1].activated;
       const delta = deltas[l];
-      return mapMatrix(
-        layer.weights,
-        (_, i, j) => delta[i][0] * activations[j][0]
-      );
+      for (let i = 0; i < weights.length; i += 1) {
+        for (let j = 0; j < weights[0].length; j += 1) {
+          weights[i][j] +=
+            (delta[i][0] * activations[j][0]) / this.dataset.length;
+        }
+      }
     });
   };
 

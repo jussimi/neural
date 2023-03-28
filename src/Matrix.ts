@@ -11,27 +11,47 @@ export const getIndex = (matrix: Matrix, row = 0, column = 0): number => {
 };
 
 export const omit = (matrix: Matrix, col: number): Matrix => {
-  return matrix.map((row) => row.filter((_, i) => i !== col));
+  const result: Matrix = [];
+  for (let i = 0; i < matrix.length; i += 1) {
+    const row: number[] = [];
+    for (let j = 0; j < matrix[0].length; j += 1) {
+      if (j !== col) {
+        row.push(matrix[i][j]);
+      }
+    }
+    result.push(row);
+  }
+  return result;
 };
 
 export const transpose = (matrix: Matrix): Matrix => {
-  return matrix[0].map((_, colIndex) => matrix.map((row) => row[colIndex]));
+  const result: Matrix = [];
+  for (let i = 0; i < matrix[0].length; i += 1) {
+    result[i] = [];
+    for (let j = 0; j < matrix.length; j += 1) {
+      result[i][j] = matrix[j][i];
+    }
+  }
+  return result;
 };
 
 export const multiply = (matrixA: Matrix, matrixB: Matrix): Matrix => {
-  const result = new Array(matrixA.length)
-    .fill(0)
-    .map(() => new Array(matrixB[0].length).fill(0));
-
-  return result.map((row, i) => {
-    return row.map((_, j) => {
-      return matrixA[i].reduce((sum, elm, k) => sum + elm * matrixB[k][j], 0);
-    });
-  });
+  const result: Matrix = [];
+  for (let i = 0; i < matrixA.length; i += 1) {
+    result[i] = [];
+    for (let j = 0; j < matrixB[0].length; j += 1) {
+      let sum = 0;
+      for (let k = 0; k < matrixA[0].length; k += 1) {
+        sum += matrixA[i][k] * matrixB[k][j];
+      }
+      result[i][j] = sum;
+    }
+  }
+  return result;
 };
 
 /**
- * Sum of two matrixes.
+ * Sum of two matrices.
  */
 export const sum = (matrixA: Matrix, matrixB: Matrix): Matrix => {
   return mapMatrix(matrixA, (x, i, j) => x + matrixB[i][j]);
@@ -51,13 +71,16 @@ export const scale = (matrix: Matrix, value: number): Matrix => {
   return mapMatrix(matrix, (x) => x * value);
 };
 
-export const clone = (matrix: Matrix): Matrix => {
-  return mapMatrix(matrix, (x) => x);
-};
-
 export const mapMatrix = (
   matrix: Matrix,
   mapper: (value: number, i: number, j: number) => number
 ): Matrix => {
-  return matrix.map((row, i) => row.map((x, j) => mapper(x, i, j)));
+  const result: Matrix = [];
+  for (let i = 0; i < matrix.length; i += 1) {
+    result[i] = [];
+    for (let j = 0; j < matrix[0].length; j += 1) {
+      result[i][j] = mapper(matrix[i][j], i, j);
+    }
+  }
+  return result;
 };
