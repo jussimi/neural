@@ -55,6 +55,10 @@ export class Matrix {
   }
 
   multiply(matrix: Matrix): Matrix {
+    if (this.N !== matrix.M)
+      throw new Error(
+        `Dimension mismatch. Got ${this.M}x${this.N} and ${matrix.M}x${matrix.N}`
+      );
     const result = new Float64Array(this.M * matrix.N);
     for (let i = 0; i < this.M; i++) {
       for (let j = 0; j < matrix.N; j++) {
@@ -114,9 +118,32 @@ export class Matrix {
     }
     return new Matrix(result, this.M, this.N);
   }
-}
 
-class Vector extends Matrix {}
+  unshift(value: number) {
+    if (this.N !== 1) throw new Error("Can only unshift vertical vectors!");
+    const result = new Float64Array(this.M * this.N + 1);
+    result[0] = value;
+    for (let i = 0; i < this.M * this.N; i += 1) {
+      result[i + 1] = this.items[i];
+    }
+    return new Matrix(result, this.M + 1, this.N);
+  }
+
+  shift() {
+    if (this.N !== 1) throw new Error("Can only shift vertical vectors!");
+    const result = new Float64Array(this.M * this.N - 1);
+    for (let i = 1; i < this.M * this.N; i += 1) {
+      result[i - 1] = this.items[i];
+    }
+    return new Matrix(result, this.M - 1, this.N);
+  }
+
+  iterate(iterator: (value: number, i: number) => void) {
+    for (let i = 0; i < this.M; i += 1) {
+      iterator(this.get(i, 0), i);
+    }
+  }
+}
 
 function calcIndex(i: number, j: number, N: number) {
   return i * N + j;

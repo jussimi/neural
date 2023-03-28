@@ -1,6 +1,6 @@
 import { Identity } from "./activation";
 import { ErrorFN } from "./error";
-import { Layer, LayerComputationResult } from "./Layer";
+import { ForwardPassResult, Layer, LayerComputationResult } from "./Layer";
 import { Matrix } from "./Matrix";
 import { Optimizer } from "./Optimizer";
 
@@ -52,8 +52,7 @@ export class Network {
       );
 
       // Calculate total-loss and total-gradient.
-      const avg = 1 / this.dataset.length;
-      totalLoss += result.loss * avg;
+      totalLoss += result.loss / this.dataset.length;
 
       return {
         input,
@@ -70,69 +69,84 @@ export class Network {
   };
 
   computeResult = (realInput: Matrix, output: Matrix, total: Matrix[]) => {
-    // Adds constant 1 to input. Grows dimension by 1 to account for bias term in weight-matrice.
-    const input = Identity.forward(realInput, false);
-
-    // Calculates neuron-sums, activations and gradients of activations for each layer.
-    const results = this.forwardPass(input);
+    // Calculates neuron-sums and activations for each layer.
+    const data = this.forwardPass(realInput, output);
 
     // Backropagate
-    this.backwardPass(input, output, results, total);
+    this.backwardPass(data.activatedInput, output, data.results, total);
 
-    const estimate = results[results.length - 1].activated;
-    return {
-      estimate: estimate,
-      loss: this.error.loss(estimate, output),
-    };
+    return data;
   };
 
-  forwardPass = (input: Matrix) => {
-    // Keep track of results for each layer.
-    const results: LayerComputationResult[] = [];
+  forwardPass = (input: Matrix, output: Matrix) => {
+    // Adds constant 1 to input. Grows dimension by 1 to account for bias term in weight-matrice.
+    const activatedInput = Identity.forward(input, false);
 
-    let currentActivation = input;
+    // Keep track of results for each layer.
+    const results: ForwardPassResult[] = [];
+
+    let currentActivation = activatedInput;
     for (let i = 0; i < this.layers.length; i += 1) {
       const layer = this.layers[i];
-      const result = layer.computeResult(currentActivation);
+      const result = layer.forwardPass(currentActivation);
       currentActivation = result.activated;
       results.push(result);
     }
 
-    return results;
+    const estimate = results[results.length - 1].activated;
+    const loss = this.error.loss(estimate, output);
+    return {
+      loss,
+      results,
+      estimate,
+      activatedInput,
+    };
   };
 
   backwardPass = (
     input: Matrix,
     output: Matrix,
-    results: LayerComputationResult[],
+    results: ForwardPassResult[],
     total: Matrix[]
   ) => {
     const resultOut = results[results.length - 1];
 
-    const deltaOut = this.error
-      .grad(resultOut.activated, output)
-      .hadamard(resultOut.gradient);
+    const layerOut = this.layers[this.layers.length - 1];
 
-    let deltas = [deltaOut];
+    const deltaOut = layerOut.backwardPass(
+      resultOut,
+      this.error.grad(resultOut.activated, output)
+    );
+
+    // Store transposes of deltas -> avoids transposing the weight matrix.
+    let deltas = [deltaOut.transpose()];
     for (let i = this.layers.length - 2; i >= 0; i -= 1) {
       const result = results[i];
-      const weights = this.layers[i + 1].weights.omit(0).transpose();
-      const delta = weights.multiply(deltas[0]).hadamard(result.gradient); // delta^(l+1) = deltas[0]
+
+      // delta^(l+1) = deltas[0]
+      const multiplyer = deltas[0].multiply(this.layers[i + 1].weights);
+      const delta = this.layers[i].backwardPass(result, multiplyer);
       deltas.unshift(delta);
     }
 
-    total.forEach((weights, l) => {
+    for (let l = 0; l < total.length; l += 1) {
+      const weights = total[l];
       const activations = l === 0 ? input : results[l - 1].activated;
       const delta = deltas[l];
       for (let i = 0; i < weights.M; i += 1) {
         for (let j = 0; j < weights.N; j += 1) {
+          // NOTE: delta is a transpose of the "real" delta.
           const newValue =
             weights.get(i, j) +
-            (delta.get(i, 0) * activations.get(j, 0)) / this.dataset.length;
+            (delta.get(0, i) * activations.get(j, 0)) / this.dataset.length;
           weights.set(i, j, newValue);
         }
       }
-    });
+    }
+  };
+
+  validate = ([input, output]: DataSet[1]) => {
+    return this.forwardPass(Matrix.fromList(input), Matrix.fromList(output));
   };
 
   initialize = (weights?: number[][][]) => {
@@ -170,9 +184,13 @@ function randomWeights(m: number, n: number) {
   for (let i = 0; i < m; i += 1) {
     let row: number[] = [];
     for (let i = 0; i < n; i += 1) {
-      row.push(Math.random());
+      row.push(getRandomBetween(-0.5, 0.5));
     }
     result.push(row);
   }
   return result;
+}
+
+function getRandomBetween(min: number, max: number) {
+  return Math.random() * (max - min) + min;
 }

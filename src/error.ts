@@ -19,6 +19,19 @@ export const LogLoss: ErrorFN = {
   },
 };
 
+export const CELoss: ErrorFN = {
+  loss: (output, expected) => {
+    const result = output.map(Math.log).transpose().multiply(expected);
+    return -result.get(0, 0);
+  },
+  grad: (output, expected) => {
+    return output.map((t, i) => {
+      const y = expected.get(i, 0);
+      return -(y / t);
+    });
+  },
+};
+
 export const MSELoss: ErrorFN = {
   loss: (output, expected) => {
     let sum = 0;

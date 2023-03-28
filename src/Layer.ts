@@ -16,6 +16,21 @@ export type LayerComputationResult = {
   gradient: Matrix;
 };
 
+export type ForwardPassResult = {
+  /**
+   * Neuron sum of weights*inputs
+   */
+  sum: Matrix;
+  /**
+   * Sum passed through the activation function
+   */
+  activated: Matrix;
+};
+
+export type BackwardPassResult = {
+  delta: Matrix;
+};
+
 export class Layer {
   isOutput: boolean = false;
 
@@ -30,16 +45,29 @@ export class Layer {
     this.activation = activation;
   }
 
-  computeResult = (input: Matrix): LayerComputationResult => {
+  forwardPass = (input: Matrix): ForwardPassResult => {
     const sum = this.weights.multiply(input);
     const activated = this.activation.forward(sum, this.isOutput);
-    const gradient = this.activation.backward(sum);
 
     return {
       sum,
       activated,
-      gradient,
     };
+  };
+
+  /**
+   * Multiplyer is a vector that should be multiplied with the jacobian.
+   *  - On output layer it is grad(E_a)^T === transpose of the Error with respect to activation.
+   *  - On other layers it is delta_next * W_next
+   */
+  backwardPass = (result: ForwardPassResult, multiplyer: Matrix): Matrix => {
+    const delta = this.activation.backward(
+      result.sum,
+      multiplyer,
+      this.isOutput
+    );
+
+    return delta;
   };
 
   initialize = (weights: Matrix, isOutput = false) => {

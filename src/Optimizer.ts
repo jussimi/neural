@@ -12,6 +12,7 @@ type OptimizerOptions = {
   beforeIteration?: (network: Network, iteration: number) => void;
   afterIteration?: OptimizerOptionFN<void>;
   stopCondition?: OptimizerOptionFN<boolean>;
+  afterAll?: () => void;
 };
 
 export type Optimizer = {
@@ -29,6 +30,7 @@ export class GradientDescentOptimizer implements Optimizer {
   beforeIteration: OptimizerOptions["beforeIteration"];
   afterIteration: OptimizerOptions["afterIteration"];
   stopCondition: OptimizerOptions["stopCondition"];
+  afterAll?: OptimizerOptions["afterAll"];
 
   constructor(
     learningRate: LearningRate,
@@ -41,6 +43,7 @@ export class GradientDescentOptimizer implements Optimizer {
     this.beforeIteration = options.beforeIteration;
     this.afterIteration = options.afterIteration;
     this.stopCondition = options.stopCondition;
+    this.afterAll = options.afterAll;
   }
 
   optimize: Optimizer["optimize"] = (network: Network, computeGradients) => {
@@ -51,6 +54,7 @@ export class GradientDescentOptimizer implements Optimizer {
       const { gradients, loss } = data;
 
       if (this.stopCondition?.(network, data, i)) {
+        console.log("STOPPING", loss);
         break;
       }
 
@@ -58,6 +62,10 @@ export class GradientDescentOptimizer implements Optimizer {
         typeof this.learningRate === "function"
           ? this.learningRate(i)
           : this.learningRate;
+
+      if (lr < 0) {
+        throw new Error("negative");
+      }
       network.layers.forEach((layer, i) => {
         const weights = layer.weights.sum(gradients[i].scale(-lr));
         layer.weights = weights;
@@ -65,5 +73,7 @@ export class GradientDescentOptimizer implements Optimizer {
 
       this.afterIteration?.(network, data, i);
     }
+
+    this.afterAll?.();
   };
 }
