@@ -1,18 +1,10 @@
 import { Identity } from "./activation";
 import { ErrorFN } from "./error";
 import { Layer, LayerComputationResult } from "./Layer";
-import {
-  hadamard,
-  Matrix,
-  multiply,
-  omit,
-  scale,
-  transpose,
-  Vector,
-} from "./Matrix";
+import { Matrix } from "./Matrix";
 import { Optimizer } from "./Optimizer";
 
-export type DataSet = [Vector, Vector][];
+export type DataSet = [number[], number[]][];
 export class Network {
   error: ErrorFN;
   dataset: DataSet;
@@ -49,11 +41,15 @@ export class Network {
 
   computeGradient = () => {
     // Initialize empty weight-matrices.
-    const totalGradient = this.layers.map((layer) => scale(layer.weights, 0));
+    const totalGradient = this.layers.map((layer) => layer.weights.scale(0));
     let totalLoss = 0;
 
     const results = this.dataset.map(([input, output]) => {
-      const result = this.computeResult(input, output, totalGradient);
+      const result = this.computeResult(
+        Matrix.fromList(input),
+        Matrix.fromList(output),
+        totalGradient
+      );
 
       // Calculate total-loss and total-gradient.
       const avg = 1 / this.dataset.length;
@@ -73,7 +69,7 @@ export class Network {
     };
   };
 
-  computeResult = (realInput: Vector, output: Vector, total: Matrix[]) => {
+  computeResult = (realInput: Matrix, output: Matrix, total: Matrix[]) => {
     // Adds constant 1 to input. Grows dimension by 1 to account for bias term in weight-matrice.
     const input = Identity.forward(realInput, false);
 
@@ -90,7 +86,7 @@ export class Network {
     };
   };
 
-  forwardPass = (input: Vector) => {
+  forwardPass = (input: Matrix) => {
     // Keep track of results for each layer.
     const results: LayerComputationResult[] = [];
 
@@ -106,39 +102,40 @@ export class Network {
   };
 
   backwardPass = (
-    input: Vector,
-    output: Vector,
+    input: Matrix,
+    output: Matrix,
     results: LayerComputationResult[],
     total: Matrix[]
   ) => {
     const resultOut = results[results.length - 1];
 
-    const deltaOut = hadamard(
-      this.error.grad(resultOut.activated, output),
-      resultOut.gradient
-    );
+    const deltaOut = this.error
+      .grad(resultOut.activated, output)
+      .hadamard(resultOut.gradient);
 
     let deltas = [deltaOut];
     for (let i = this.layers.length - 2; i >= 0; i -= 1) {
       const result = results[i];
-      const weights = transpose(omit(this.layers[i + 1].weights, 0));
-      const delta = hadamard(multiply(weights, deltas[0]), result.gradient); // delta^(l+1) = deltas[0]
+      const weights = this.layers[i + 1].weights.omit(0).transpose();
+      const delta = weights.multiply(deltas[0]).hadamard(result.gradient); // delta^(l+1) = deltas[0]
       deltas.unshift(delta);
     }
 
     total.forEach((weights, l) => {
       const activations = l === 0 ? input : results[l - 1].activated;
       const delta = deltas[l];
-      for (let i = 0; i < weights.length; i += 1) {
-        for (let j = 0; j < weights[0].length; j += 1) {
-          weights[i][j] +=
-            (delta[i][0] * activations[j][0]) / this.dataset.length;
+      for (let i = 0; i < weights.M; i += 1) {
+        for (let j = 0; j < weights.N; j += 1) {
+          const newValue =
+            weights.get(i, j) +
+            (delta.get(i, 0) * activations.get(j, 0)) / this.dataset.length;
+          weights.set(i, j, newValue);
         }
       }
     });
   };
 
-  initialize = (weights?: Matrix[]) => {
+  initialize = (weights?: number[][][]) => {
     if (weights && weights.length !== this.layers.length) {
       throw new Error(
         `Invalid amount of weights supplied. Should be ${this.layers.length}.`
@@ -163,7 +160,7 @@ export class Network {
       } else {
         w = randomWeights(m, n);
       }
-      layer.initialize(w, l === this.layers.length - 1);
+      layer.initialize(Matrix.fromArrays(w), l === this.layers.length - 1);
     });
   };
 }

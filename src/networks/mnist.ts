@@ -1,17 +1,17 @@
 import { TanH, Sigmoid, ReLu } from "../activation";
 import { LogLoss, MSELoss } from "../error";
 import { Layer } from "../Layer";
-import { Vector, Scalar, Matrix, fromVect } from "../Matrix";
+import { Matrix } from "../Matrix";
 import { DataSet, Network } from "../Network";
 import { GradientDescentOptimizer } from "../Optimizer";
 
 import fs from "fs";
 import path from "path";
 
-const oneHotEncode = (label: number, len: number): Vector => {
+const oneHotEncode = (label: number, len: number): Matrix => {
   const vector = [...Array(len).keys()].map((x) => 0);
   vector[label] = 1;
-  return fromVect(vector);
+  return Matrix.fromList(vector);
 };
 
 const runMnist = () => {
@@ -28,20 +28,23 @@ const runMnist = () => {
       .slice(i * batchSize, i * batchSize + batchSize)
       .map((row) => {
         const items = row.split(",").map((i) => parseInt(i));
-        const label = [[items.shift() as number]]; //oneHotEncode(items.shift() as number, labelSize);
-        const point = fromVect(items);
-        return [point, label] as [Vector, Vector];
+        const label = [items.shift() as number]; //oneHotEncode(items.shift() as number, labelSize);
+        const point = items;
+        return [point, label] as [number[], number[]];
       });
   };
 
+  let now = Date.now();
   const gd = new GradientDescentOptimizer(1, 10, {
-    beforeIteration: (_, { loss }, i) => {
-      console.log("Iteration: ", i);
-      console.log("   - loss: ", loss);
+    beforeIteration: () => {
+      now = Date.now();
     },
-    afterIteration(network, _, i) {
+    afterIteration(network, { loss }, i) {
       const batch = generateBatch(i);
       network.setData(batch);
+      console.log("Iteration: ", i);
+      console.log("   - loss: ", loss);
+      console.log(Date.now() - now);
     },
     stopCondition: (_, { loss }) => {
       return loss < 0.01;

@@ -1,4 +1,4 @@
-import { Vector, mapMatrix } from "./Matrix";
+import { Matrix } from "./Matrix";
 
 export type ScalarActivationFN = {
   forward: (x: number) => number;
@@ -21,8 +21,8 @@ const ScalarSigmoid: ScalarActivationFN = {
 };
 
 export type ActivationFN = {
-  forward: (x: Vector, isOutput: boolean) => Vector;
-  backward: (x: Vector) => Vector;
+  forward: (x: Matrix, isOutput: boolean) => Matrix;
+  backward: (x: Matrix) => Matrix;
 };
 
 export const ReLu: ActivationFN = {
@@ -40,19 +40,20 @@ export const Sigmoid: ActivationFN = {
   backward: (x) => activate(ScalarSigmoid.backward, x),
 };
 
-export const Softmax: ActivationFN = {
-  forward: (input, isOutput) => {
-    const sum = input.reduce((s, x) => s + Math.exp(x[0]), 0);
-    const result = mapMatrix(input, (x) => x / sum);
-    if (!isOutput) {
-      result.unshift([1]);
-    }
-    return result;
-  },
-  backward: (x) => {
-    return x;
-  },
-};
+// export const Softmax: ActivationFN = {
+//   forward: (input, isOutput) => {
+
+//     const sum = input.reduce((s, x) => s + Math.exp(x[0]), 0);
+//     const result = mapMatrix(input, (x) => x / sum);
+//     if (!isOutput) {
+//       result.unshift([1]);
+//     }
+//     return result;
+//   },
+//   backward: (x) => {
+//     return x;
+//   },
+// };
 
 export const Identity: ActivationFN = {
   forward: (x, isOutput) => activate((x) => x, x, !isOutput),
@@ -70,12 +71,14 @@ function TanhFn(x: number) {
 
 function activate(
   fn: ScalarActivationFN["forward"],
-  input: Vector,
+  input: Matrix,
   appendBias = false
 ) {
-  const vect = mapMatrix(input, (x) => fn(x));
+  const vect = input.map((x) => fn(x));
   if (appendBias) {
-    vect.unshift([1]);
+    const asArray = vect.toArrays();
+    asArray.unshift([1]);
+    return Matrix.fromArrays(asArray);
   }
   return vect;
 }

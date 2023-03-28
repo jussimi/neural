@@ -1,4 +1,4 @@
-import { Matrix, scale, sum } from "./Matrix";
+import { Matrix } from "./Matrix";
 import { Network } from "./Network";
 
 type OptimizationState = { loss: number; gradients: Matrix[] };
@@ -9,7 +9,7 @@ type OptimizerOptionFN<T> = (
 ) => T;
 
 type OptimizerOptions = {
-  beforeIteration?: OptimizerOptionFN<void>;
+  beforeIteration?: (network: Network, iteration: number) => void;
   afterIteration?: OptimizerOptionFN<void>;
   stopCondition?: OptimizerOptionFN<boolean>;
 };
@@ -45,6 +45,8 @@ export class GradientDescentOptimizer implements Optimizer {
 
   optimize: Optimizer["optimize"] = (network: Network, computeGradients) => {
     for (let i = 0; i < this.iterations; i += 1) {
+      this.beforeIteration?.(network, i);
+
       const data = computeGradients();
       const { gradients, loss } = data;
 
@@ -52,14 +54,12 @@ export class GradientDescentOptimizer implements Optimizer {
         break;
       }
 
-      this.beforeIteration?.(network, data, i);
-
       const lr =
         typeof this.learningRate === "function"
           ? this.learningRate(i)
           : this.learningRate;
       network.layers.forEach((layer, i) => {
-        const weights = sum(layer.weights, scale(gradients[i], -lr));
+        const weights = layer.weights.sum(gradients[i].scale(-lr));
         layer.weights = weights;
       });
 

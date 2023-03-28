@@ -1,33 +1,35 @@
-import { Vector, mapMatrix } from "./Matrix";
+import { Matrix } from "./Matrix";
 
 export type ErrorFN = {
-  loss: (output: Vector, expected: Vector) => number;
-  grad: (output: Vector, expected: Vector) => Vector;
+  loss: (output: Matrix, expected: Matrix) => number;
+  grad: (output: Matrix, expected: Matrix) => Matrix;
 };
 
 export const LogLoss: ErrorFN = {
   loss: (output, expected) => {
-    const t = output[0][0];
-    const y = expected[0][0];
+    const t = output.get(0, 0);
+    const y = expected.get(0, 0);
     return -(y * Math.log(t) + (1 - y) * Math.log(1 - t));
   },
   grad: (output, expected) => {
-    const t = output[0][0];
-    const y = expected[0][0];
+    const t = output.get(0, 0);
+    const y = expected.get(0, 0);
     const result = (t - y) / (t - t * t);
-    return [[result]];
+    return Matrix.fromArrays([[result]]);
   },
 };
 
 export const MSELoss: ErrorFN = {
   loss: (output, expected) => {
-    return output.reduce((sum, row, i) => {
-      return sum + Math.pow(row[0] - expected[i][0], 2);
-    }, 0);
+    let sum = 0;
+    for (let i = 0; i < output.M; i += 1) {
+      sum += Math.pow(output.get(i, 0) - expected.get(i, 0), 2);
+    }
+    return sum;
   },
   grad: (output, expected) => {
-    return mapMatrix(output, (x, i, j) => {
-      return x - expected[i][j];
+    return output.map((x, i, j) => {
+      return x - expected.get(i, j);
     });
   },
 };
