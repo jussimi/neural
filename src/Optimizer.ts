@@ -54,7 +54,6 @@ export class GradientDescentOptimizer implements Optimizer {
       const { gradients, loss } = data;
 
       if (this.stopCondition?.(network, data, i)) {
-        console.log("STOPPING", loss);
         break;
       }
 
@@ -64,11 +63,11 @@ export class GradientDescentOptimizer implements Optimizer {
           : this.learningRate;
 
       if (lr < 0) {
-        throw new Error("negative");
+        throw new Error("negative learningRate!");
       }
       network.layers.forEach((layer, i) => {
         const weights = layer.weights.sum(gradients[i].scale(-lr));
-        layer.weights = weights;
+        layer.updateWeights(weights);
       });
 
       this.afterIteration?.(network, data, i);

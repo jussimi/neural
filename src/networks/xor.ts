@@ -1,7 +1,3 @@
-import { TanH, Sigmoid } from "../activation";
-import { LogLoss } from "../error";
-import { Layer } from "../Layer";
-import { Matrix } from "../Matrix";
 import { DataSet, Network } from "../Network";
 import { GradientDescentOptimizer } from "../Optimizer";
 
@@ -22,9 +18,6 @@ const runXOR = () => {
   ];
   const w2 = [[-0.5, 0.5, 0.5]];
 
-  const l1 = new Layer(TanH, 2);
-  const l2 = new Layer(Sigmoid, 1);
-
   const gd = new GradientDescentOptimizer(1, 500, {
     afterIteration: (_, { loss }, i) => {
       if (i % 20 === 0) {
@@ -41,7 +34,10 @@ const runXOR = () => {
       return stop;
     },
   });
-  const network = new Network(dataSet, LogLoss, gd, [l1, l2]);
+
+  const network = new Network(dataSet, "log-loss", gd)
+    .add("tanh", 2)
+    .add("sigmoid", 1);
 
   network.initialize([w1, w2]);
   network.optimize();

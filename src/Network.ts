@@ -1,27 +1,20 @@
-import { Identity } from "./activation";
-import { ErrorFN } from "./error";
-import { ForwardPassResult, Layer, LayerComputationResult } from "./Layer";
+import { ActivationFunctionKey, Identity } from "./activation";
+import { ErrorFunctionKey } from "./error";
+import { ForwardPassResult, Layer } from "./Layer";
 import { Matrix } from "./Matrix";
 import { Optimizer } from "./Optimizer";
 
 export type DataSet = [number[], number[]][];
 export class Network {
-  error: ErrorFN;
+  error: ErrorFunctionKey;
   dataset: DataSet;
   optimizer: Optimizer;
-  layers: Layer[];
+  layers: Layer[] = [];
 
-  constructor(
-    dataset: DataSet,
-    error: ErrorFN,
-    optimizer: Optimizer,
-    layers: Layer[]
-  ) {
-    if (!layers.length) throw new Error("You need to specify layers");
+  constructor(dataset: DataSet, error: ErrorFunctionKey, optimizer: Optimizer) {
     this.dataset = dataset;
     this.error = error;
     this.optimizer = optimizer;
-    this.layers = layers;
   }
 
   setData = (dataset: DataSet) => {
@@ -44,10 +37,10 @@ export class Network {
     const totalGradient = this.layers.map((layer) => layer.weights.scale(0));
     let totalLoss = 0;
 
-    const results = this.dataset.map(([input, output]) => {
+    const results = this.dataset.map(([input, expected]) => {
       const result = this.computeResult(
         Matrix.fromList(input),
-        Matrix.fromList(output),
+        Matrix.fromList(expected),
         totalGradient
       );
 
@@ -56,7 +49,7 @@ export class Network {
 
       return {
         input,
-        output,
+        output: expected,
         ...result,
       };
     });
@@ -68,17 +61,16 @@ export class Network {
     };
   };
 
-  computeResult = (realInput: Matrix, output: Matrix, total: Matrix[]) => {
+  computeResult = (realInput: Matrix, expected: Matrix, total: Matrix[]) => {
     // Calculates neuron-sums and activations for each layer.
-    const data = this.forwardPass(realInput, output);
+    const data = this.forwardPass(realInput, expected);
 
     // Backropagate
-    this.backwardPass(data.activatedInput, output, data.results, total);
-
+    this.backwardPass(data.activatedInput, expected, data.results, total);
     return data;
   };
 
-  forwardPass = (input: Matrix, output: Matrix) => {
+  forwardPass = (input: Matrix, expected: Matrix) => {
     // Adds constant 1 to input. Grows dimension by 1 to account for bias term in weight-matrice.
     const activatedInput = Identity.forward(input, false);
 
@@ -88,24 +80,23 @@ export class Network {
     let currentActivation = activatedInput;
     for (let i = 0; i < this.layers.length; i += 1) {
       const layer = this.layers[i];
-      const result = layer.forwardPass(currentActivation);
+      const result = layer.forwardPass(currentActivation, expected);
       currentActivation = result.activated;
       results.push(result);
     }
 
-    const estimate = results[results.length - 1].activated;
-    const loss = this.error.loss(estimate, output);
+    const { activated, error } = results[results.length - 1];
     return {
-      loss,
+      loss: error,
       results,
-      estimate,
+      estimate: activated,
       activatedInput,
     };
   };
 
   backwardPass = (
     input: Matrix,
-    output: Matrix,
+    expected: Matrix,
     results: ForwardPassResult[],
     total: Matrix[]
   ) => {
@@ -113,19 +104,19 @@ export class Network {
 
     const layerOut = this.layers[this.layers.length - 1];
 
-    const deltaOut = layerOut.backwardPass(
-      resultOut,
-      this.error.grad(resultOut.activated, output)
-    );
+    const deltaOut = layerOut.outputPass(resultOut, expected);
 
     // Store transposes of deltas -> avoids transposing the weight matrix.
-    let deltas = [deltaOut.transpose()];
+    let deltas = [deltaOut];
     for (let i = this.layers.length - 2; i >= 0; i -= 1) {
       const result = results[i];
 
       // delta^(l+1) = deltas[0]
-      const multiplyer = deltas[0].multiply(this.layers[i + 1].weights);
-      const delta = this.layers[i].backwardPass(result, multiplyer);
+      const delta = this.layers[i].backwardPass(
+        result,
+        deltas[0],
+        this.layers[i + 1]
+      );
       deltas.unshift(delta);
     }
 
@@ -135,21 +126,35 @@ export class Network {
       const delta = deltas[l];
       for (let i = 0; i < weights.M; i += 1) {
         for (let j = 0; j < weights.N; j += 1) {
-          // NOTE: delta is a transpose of the "real" delta.
-          const newValue =
-            weights.get(i, j) +
-            (delta.get(0, i) * activations.get(j, 0)) / this.dataset.length;
+          const diff = delta.get(i, 0) * activations.get(j, 0);
+          const newValue = weights.get(i, j) + diff / this.dataset.length;
           weights.set(i, j, newValue);
         }
       }
     }
   };
 
-  validate = ([input, output]: DataSet[1]) => {
-    return this.forwardPass(Matrix.fromList(input), Matrix.fromList(output));
+  validate = ([input, expected]: DataSet[1]) => {
+    return this.forwardPass(Matrix.fromList(input), Matrix.fromList(expected));
+  };
+
+  add = (activation: ActivationFunctionKey, neuronCount: number) => {
+    const layers = [
+      ...this.layers,
+      new Layer(activation, neuronCount, this.error),
+    ];
+    const clone = new Network(this.dataset, this.error, this.optimizer);
+    clone.layers = layers;
+    return clone;
+  };
+
+  train = () => {
+    this.initialize();
+    this.optimize();
   };
 
   initialize = (weights?: number[][][]) => {
+    if (!this.layers.length) throw new Error("You need to specify layers");
     if (weights && weights.length !== this.layers.length) {
       throw new Error(
         `Invalid amount of weights supplied. Should be ${this.layers.length}.`

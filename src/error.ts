@@ -15,7 +15,7 @@ export const LogLoss: ErrorFN = {
     const t = output.get(0, 0);
     const y = expected.get(0, 0);
     const result = (t - y) / (t - t * t);
-    return Matrix.fromArrays([[result]]);
+    return Matrix.fromList([result]);
   },
 };
 
@@ -46,3 +46,5 @@ export const MSELoss: ErrorFN = {
     });
   },
 };
+
+export type ErrorFunctionKey = "cross-entropy" | "mean-squared" | "log-loss";

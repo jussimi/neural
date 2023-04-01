@@ -1,3 +1,8 @@
+/**
+ * A class representing a Matrix.
+ *  - Implemented using a flat Float64Array, since this is more efficient than normal array of arrays.
+ *  - Loops are done using plain old for-loops, since they seem to be more efficient than functional methods.
+ */
 export class Matrix {
   M: number;
   N: number;
@@ -10,6 +15,9 @@ export class Matrix {
     this.items = items;
   }
 
+  /**
+   * Initialize matrix from an array of arrays.
+   */
   static fromArrays(items: number[][]) {
     const m = items.length;
     const n = items[0].length;
@@ -23,6 +31,10 @@ export class Matrix {
     return new Matrix(list, m, n);
   }
 
+  /**
+   * Initialize a Matrix from a single list.
+   *  - used for creating vertical or horizontal vectors.
+   */
   static fromList(items: number[], isVertical = true) {
     const m = isVertical ? items.length : 1;
     const n = isVertical ? 1 : items.length;
@@ -43,6 +55,9 @@ export class Matrix {
     this.items[calcIndex(i, j, this.N)] = value;
   }
 
+  /**
+   * Returns matrix as normal 2d-list. Use for logging/debugging.
+   */
   toArrays() {
     const result: number[][] = [];
     for (let i = 0; i < this.M; i += 1) {
@@ -82,6 +97,9 @@ export class Matrix {
     return new Matrix(result, this.N, this.M);
   }
 
+  /**
+   * Omits specified column from the matrix.
+   */
   omit(col: number) {
     const result = new Float64Array(this.M * this.N - 1);
 
@@ -97,28 +115,37 @@ export class Matrix {
     return new Matrix(result, this.M, this.N - 1);
   }
 
-  sum(matrix: Matrix) {
-    return this.map((x, i, j) => x + matrix.get(i, j));
+  sum(matrix: Matrix, inPlace = false) {
+    return this.map((x, i, j) => x + matrix.get(i, j), inPlace);
   }
 
-  hadamard(matrix: Matrix) {
-    return this.map((x, i, j) => x * matrix.get(i, j));
+  subtract(matrix: Matrix, inPlace = false) {
+    return this.map((x, i, j) => x - matrix.get(i, j), inPlace);
   }
 
-  scale(value: number) {
-    return this.map((x) => x * value);
+  hadamard(matrix: Matrix, inPlace = false) {
+    return this.map((x, i, j) => x * matrix.get(i, j), inPlace);
   }
 
-  map(mapper: (item: number, i: number, j: number) => number) {
-    const result = new Float64Array(this.M * this.N);
+  scale(value: number, inPlace = false) {
+    return this.map((x) => x * value, inPlace);
+  }
+
+  map(mapper: (item: number, i: number, j: number) => number, inPlace = false) {
+    const result = inPlace ? this.items : new Float64Array(this.M * this.N);
     for (let i = 0; i < this.M; i += 1) {
       for (let j = 0; j < this.N; j += 1) {
         result[calcIndex(i, j, this.N)] = mapper(this.get(i, j), i, j);
       }
     }
-    return new Matrix(result, this.M, this.N);
+    return inPlace ? this : new Matrix(result, this.M, this.N);
   }
 
+  // TODO: Could probably create a Vector-subclass.
+
+  /**
+   * Removes first element from a vertical vector.
+   */
   unshift(value: number) {
     if (this.N !== 1) throw new Error("Can only unshift vertical vectors!");
     const result = new Float64Array(this.M * this.N + 1);
@@ -129,15 +156,9 @@ export class Matrix {
     return new Matrix(result, this.M + 1, this.N);
   }
 
-  shift() {
-    if (this.N !== 1) throw new Error("Can only shift vertical vectors!");
-    const result = new Float64Array(this.M * this.N - 1);
-    for (let i = 1; i < this.M * this.N; i += 1) {
-      result[i - 1] = this.items[i];
-    }
-    return new Matrix(result, this.M - 1, this.N);
-  }
-
+  /**
+   * Iterate over a vertical vector.
+   */
   iterate(iterator: (value: number, i: number) => void) {
     for (let i = 0; i < this.M; i += 1) {
       iterator(this.get(i, 0), i);

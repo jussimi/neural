@@ -20,27 +20,30 @@ const ScalarSigmoid: ScalarActivationFN = {
   backward: (x) => SigmoidFn(x) * (1 - SigmoidFn(x)),
 };
 
+export type ActivationFunctionKey = "sigmoid" | "tanh" | "relu" | "softmax";
+
 export type ActivationFN = {
   forward: (sum: Matrix, isOutput: boolean) => Matrix;
-  backward: (sum: Matrix, multiplyer: Matrix, isOutput: boolean) => Matrix;
+  backward: (sum: Matrix) => Matrix;
+  output: (output: Matrix, expected: Matrix) => Matrix;
 };
 
 export const ReLu: ActivationFN = {
   forward: (sum, isOutput) => activate(ScalarReLu.forward, sum, !isOutput),
-  backward: (sum, multiplyer, isOutput) =>
-    backpropagate(ScalarReLu.backward, sum, multiplyer, !isOutput),
+  backward: (sum) => backpropagate(ScalarReLu.backward, sum),
+  output: (sum) => backpropagate(ScalarReLu.backward, sum),
 };
 
 export const TanH: ActivationFN = {
   forward: (sum, isOutput) => activate(ScalarTanH.forward, sum, !isOutput),
-  backward: (sum, multiplyer, isOutput) =>
-    backpropagate(ScalarTanH.backward, sum, multiplyer, !isOutput),
+  backward: (sum) => backpropagate(ScalarTanH.backward, sum),
+  output: (sum) => backpropagate(ScalarTanH.backward, sum),
 };
 
 export const Sigmoid: ActivationFN = {
   forward: (sum, isOutput) => activate(ScalarSigmoid.forward, sum, !isOutput),
-  backward: (sum, multiplyer, isOutput) =>
-    backpropagate(ScalarSigmoid.backward, sum, multiplyer, !isOutput),
+  backward: (sum) => backpropagate(ScalarSigmoid.backward, sum),
+  output: (sum) => backpropagate(ScalarSigmoid.backward, sum),
 };
 
 export const Softmax: ActivationFN = {
@@ -52,30 +55,51 @@ export const Softmax: ActivationFN = {
 
     return result;
   },
-  backward: (sum, multiplyer, isOutput) => {
-    const jacobianRows: number[][] = [];
-    const sums = SoftmaxFn(sum);
-    for (let i = 0; i < sum.M; i += 1) {
-      jacobianRows[i] = [];
-      const s_i = sums.get(i, 0);
-      for (let j = 0; j < sum.M; j += 1) {
-        if (i === j) {
-          jacobianRows[i][j] = s_i * (1 - s_i);
-        } else {
-          jacobianRows[i][j] = -s_i * sums.get(j, 0);
-        }
-      }
-    }
-    const jacobian = Matrix.fromArrays(jacobianRows);
-    const result = multiplyer.transpose().multiply(jacobian).transpose();
-    return result;
+  output: (sum, expected) => {
+    return sum.subtract(expected);
+  },
+  backward: (sum) => {
+    throw new Error("Use softmax only on output!");
+    // const jacobianRows: number[][] = [];
+    // const sums = SoftmaxFn(sum);
+    // for (let i = 0; i < sum.M; i += 1) {
+    //   jacobianRows[i] = [];
+    //   const s_i = sums.get(i, 0);
+    //   for (let j = 0; j < sum.M; j += 1) {
+    //     if (i === j) {
+    //       jacobianRows[i][j] = s_i * (1 - s_i);
+    //     } else {
+    //       jacobianRows[i][j] = -s_i * sums.get(j, 0);
+    //     }
+    //   }
+    // }
+    // const jacobian = Matrix.fromArrays(jacobianRows);
+    // const result = multiplyer.transpose().multiply(jacobian).transpose();
+    // return result;
   },
 };
 
 export const Identity: ActivationFN = {
   forward: (sum, isOutput) => activate((sum) => sum, sum, !isOutput),
-  backward: (sum, _, isOutput) => activate((sum) => sum, sum, !isOutput),
+  backward: (sum) => activate((sum) => sum, sum, false),
+  output: (sum) => activate((sum) => sum, sum, false),
 };
+
+function backpropagate(fn: ScalarActivationFN["backward"], sum: Matrix) {
+  return sum.map(fn);
+}
+
+function activate(
+  fn: ScalarActivationFN["forward"],
+  sum: Matrix,
+  appendBias: boolean
+) {
+  const vect = sum.map(fn);
+  if (appendBias) {
+    return vect.unshift(1);
+  }
+  return vect;
+}
 
 function SigmoidFn(x: number) {
   const divisor = 1 + Math.exp(-x);
@@ -100,30 +124,4 @@ function SoftmaxFn(vect: Matrix) {
   });
 
   return vect.map((x) => Math.exp(x - max) / sum);
-}
-
-function backpropagate(
-  fn: ScalarActivationFN["backward"],
-  sum: Matrix,
-  multiplyer: Matrix,
-  omitBias: boolean
-) {
-  let gradient = sum.map(fn);
-  if (omitBias) {
-    gradient = gradient.unshift(1);
-  }
-  const result = multiplyer.hadamard(gradient);
-  return omitBias ? result.omit(0) : result;
-}
-
-function activate(
-  fn: ScalarActivationFN["forward"],
-  sum: Matrix,
-  appendBias: boolean
-) {
-  const vect = sum.map(fn);
-  if (appendBias) {
-    return vect.unshift(1);
-  }
-  return vect;
 }
