@@ -9,7 +9,7 @@ const runXOR = () => {
     [[0, 0], 0],
   ].map((row) => {
     const [input, output] = row;
-    return [input as number[], [output as number]];
+    return { input, output } as DataSet[1];
   });
 
   const w1 = [

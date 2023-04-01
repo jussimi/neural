@@ -16,9 +16,9 @@ const readDataSet = (path: string): DataSet => {
     .filter((x) => !!x)
     .map((line: string) => {
       const items = line.split(",").map((i) => parseInt(i));
-      const label = oneHotEncode(items.shift() as number, LABEL_SIZE);
-      const point = items;
-      return [point, label];
+      const output = oneHotEncode(items.shift() as number, LABEL_SIZE);
+      const input = items;
+      return { input, output };
     });
 };
 
@@ -37,7 +37,7 @@ const runMnist = () => {
     testData.forEach((point) => {
       const { loss, estimate } = nn.validate(point);
       totalLoss += loss / testData.length;
-      const label = point[1].indexOf(1);
+      const label = point.output.indexOf(1);
       const values = estimate.transpose().toArrays()[0];
       const max = Math.max(...values);
       if (label !== -1 && label === values.indexOf(max)) {

@@ -4,7 +4,7 @@ import { ForwardPassResult, Layer } from "./Layer";
 import { Matrix } from "./Matrix";
 import { Optimizer } from "./Optimizer";
 
-export type DataSet = [number[], number[]][];
+export type DataSet = { input: number[]; output: number[] }[];
 export class Network {
   error: ErrorFunctionKey;
   dataset: DataSet;
@@ -37,7 +37,7 @@ export class Network {
     const totalGradient = this.layers.map((layer) => layer.weights.scale(0));
     let totalLoss = 0;
 
-    const results = this.dataset.map(([input, expected]) => {
+    const results = this.dataset.map(({ input, output: expected }) => {
       const result = this.computeResult(
         Matrix.fromList(input),
         Matrix.fromList(expected),
@@ -134,8 +134,8 @@ export class Network {
     }
   };
 
-  validate = ([input, expected]: DataSet[1]) => {
-    return this.forwardPass(Matrix.fromList(input), Matrix.fromList(expected));
+  validate = ({ input, output }: DataSet[1]) => {
+    return this.forwardPass(Matrix.fromList(input), Matrix.fromList(output));
   };
 
   add = (activation: ActivationFunctionKey, neuronCount: number) => {
@@ -162,7 +162,7 @@ export class Network {
     }
 
     // First dimension is based on the first input of the dataset.
-    let currentDimension = this.dataset[0][0].length;
+    let currentDimension = this.dataset[0].input.length;
     this.layers.map((layer, l) => {
       const m = layer.neuronCount;
       const n = currentDimension + 1;
