@@ -136,3 +136,41 @@ export class GradientDescentOptimizer extends BaseOptimizer {
     });
   }
 }
+
+export class AdaGradOptimizer extends BaseOptimizer {
+  gradientSquared: Matrix[] = [];
+
+  lambda = Math.pow(10, -7);
+
+  constructor(options: OptimizerOptions) {
+    super(options);
+
+    this.doUpdate = (learningRate, data, network) => {
+      const { gradients } = data;
+      if (!this.gradientSquared.length) {
+        this.initializeGradientSquared(gradients);
+      }
+
+      this.gradientSquared = this.gradientSquared.map((grad, i) => {
+        return grad.sum(gradients[i].hadamard(gradients[i]));
+      });
+
+      network.layers.forEach((layer, l) => {
+        const weights = layer.weights;
+        const weightDelta = this.gradientSquared[l].map((item) => {
+          return learningRate / (this.lambda + Math.sqrt(item));
+        });
+
+        layer.updateWeights(
+          weights.subtract(weightDelta.hadamard(gradients[l]))
+        );
+      });
+    };
+  }
+
+  private initializeGradientSquared(gradients: Matrix[]) {
+    this.gradientSquared = gradients.map((grad) => {
+      return grad.scale(0);
+    });
+  }
+}
