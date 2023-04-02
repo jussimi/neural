@@ -234,3 +234,51 @@ export class AdaDeltaOptimizer extends BaseOptimizer {
     this.initialized = true;
   }
 }
+
+export class RMSPropOptimizer extends BaseOptimizer {
+  initialized = false;
+
+  gradientAverage: Matrix[] = [];
+
+  lambda = Math.pow(10, -7);
+
+  decay: number;
+
+  constructor(options: OptimizerOptions & { decay: number }) {
+    super(options);
+
+    this.decay = options.decay;
+
+    this.doUpdate = (learningRate, data, network) => {
+      const { gradients } = data;
+      if (!this.initialized) {
+        this.initialize(gradients);
+      }
+
+      this.gradientAverage = this.gradientAverage.map((grad, l) => {
+        return this.calcMovingAverage(grad, gradients[l]);
+      });
+
+      network.layers.forEach((layer, l) => {
+        const weights = layer.weights;
+        const weightDelta = this.gradientAverage[l].map((item, i, j) => {
+          const gradRMS = Math.sqrt(item + this.lambda);
+          return -(learningRate / gradRMS) * gradients[l].get(i, j);
+        });
+
+        layer.updateWeights(weights.sum(weightDelta));
+      });
+    };
+  }
+
+  private calcMovingAverage(previous: Matrix, vect: Matrix) {
+    return previous
+      .scale(this.decay)
+      .sum(vect.hadamard(vect).scale(1 - this.decay));
+  }
+
+  private initialize(gradients: Matrix[]) {
+    this.gradientAverage = gradients.map((grad) => grad.scale(0));
+    this.initialized = true;
+  }
+}

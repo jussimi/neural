@@ -4,6 +4,7 @@ import {
   AdaGradOptimizer,
   GradientDescentOptimizer,
   OptimizerOptions,
+  RMSPropOptimizer,
 } from "../Optimizer";
 
 import fs from "fs";
@@ -87,11 +88,11 @@ const runMnist = () => {
     },
   };
 
-  const optimizer = new GradientDescentOptimizer({
-    ...options,
-    momentum: 0,
-    nesterov: false,
-  });
+  // const optimizer = new GradientDescentOptimizer({
+  //   ...options,
+  //   momentum: 0,
+  //   nesterov: false,
+  // });
 
   // const optimizer = new AdaGradOptimizer({
   //   ...options,
@@ -102,6 +103,12 @@ const runMnist = () => {
   //   ...options,
   //   decay: 0.9,
   // });
+
+  const optimizer = new RMSPropOptimizer({
+    ...options,
+    decay: 0.9,
+    learningRate: 0.001,
+  });
 
   const initialBatch = generateBatch(trainData, BATCH_SIZE);
   const network = new Network(initialBatch, "cross-entropy", optimizer)
