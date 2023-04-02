@@ -59,23 +59,8 @@ export const Softmax: ActivationFN = {
     return sum.subtract(expected);
   },
   backward: (sum) => {
+    // TODO
     throw new Error("Use softmax only on output!");
-    // const jacobianRows: number[][] = [];
-    // const sums = SoftmaxFn(sum);
-    // for (let i = 0; i < sum.M; i += 1) {
-    //   jacobianRows[i] = [];
-    //   const s_i = sums.get(i, 0);
-    //   for (let j = 0; j < sum.M; j += 1) {
-    //     if (i === j) {
-    //       jacobianRows[i][j] = s_i * (1 - s_i);
-    //     } else {
-    //       jacobianRows[i][j] = -s_i * sums.get(j, 0);
-    //     }
-    //   }
-    // }
-    // const jacobian = Matrix.fromArrays(jacobianRows);
-    // const result = multiplyer.transpose().multiply(jacobian).transpose();
-    // return result;
   },
 };
 
@@ -102,12 +87,12 @@ function activate(
 }
 
 function SigmoidFn(x: number) {
-  const divisor = 1 + Math.exp(-x);
+  const divisor = 1 + clampedExp(-x);
   return 1 / divisor;
 }
 
 function TanhFn(x: number) {
-  return (Math.exp(x) - Math.exp(-x)) / (Math.exp(x) + Math.exp(-x));
+  return (clampedExp(x) - clampedExp(-x)) / (clampedExp(x) + clampedExp(-x));
 }
 
 function SoftmaxFn(vect: Matrix) {
@@ -120,8 +105,16 @@ function SoftmaxFn(vect: Matrix) {
 
   let sum = 0;
   vect.iterate((value) => {
-    sum += Math.exp(value - max);
+    sum += clampedExp(value - max);
   });
 
-  return vect.map((x) => Math.exp(x - max) / sum);
+  const res = vect.map((x) => clampedExp(x - max) / sum);
+  return res;
+}
+
+function clampedExp(x: number) {
+  const range = 500;
+  const clamped = Math.min(Math.max(-range, x), range);
+
+  return Math.exp(clamped);
 }

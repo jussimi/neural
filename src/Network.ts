@@ -188,7 +188,8 @@ function randomWeights(m: number, n: number) {
   const result: number[][] = [];
   for (let i = 0; i < m; i += 1) {
     let row: number[] = [];
-    for (let i = 0; i < n; i += 1) {
+    row[0] = 0;
+    for (let j = 1; j < n; j += 1) {
       row.push(getRandomBetween(-0.5, 0.5));
     }
     result.push(row);

@@ -144,7 +144,7 @@ export class Matrix {
   // TODO: Could probably create a Vector-subclass.
 
   /**
-   * Removes first element from a vertical vector.
+   * Appends element to start of a vertical vector.
    */
   unshift(value: number) {
     if (this.N !== 1) throw new Error("Can only unshift vertical vectors!");

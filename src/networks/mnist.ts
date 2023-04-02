@@ -1,11 +1,11 @@
 import { DataSet, Network } from "../Network";
-import { GradientDescentOptimizer } from "../Optimizer";
+import { GradientDescentOptimizer, OptimizerOptions } from "../Optimizer";
 
 import fs from "fs";
 import { oneHotEncode, generateBatch } from "../utils";
 
 const LABEL_SIZE = 10;
-const BATCH_SIZE = 128;
+const BATCH_SIZE = 200;
 const EPOCHS = 10;
 
 const readDataSet = (path: string): DataSet => {
@@ -49,54 +49,51 @@ const runMnist = () => {
   };
 
   const schedule = (i: number) => {
-    const initial = 1;
+    const initial = 0.5;
     const decay = 0.1;
-    const min = 0.01;
+    const min = 0.05;
     return Math.max(min, initial * (1 / (1 + decay * i)));
   };
 
-  const times: number[] = [];
-
-  const startTime = Date.now();
-  let now = Date.now();
-  const gd = new GradientDescentOptimizer(schedule, iterations, {
-    beforeIteration: () => {
-      now = Date.now();
-    },
+  const start = Date.now();
+  const options: OptimizerOptions = {
+    learningRate: schedule,
+    maxIterations: iterations,
     afterIteration(network, { gradients, loss }, i) {
       const batch = generateBatch(trainData, BATCH_SIZE);
       network.setData(batch);
-      if (i % 100 === 0) {
-        console.log("Iteration: ", i);
+      if (i % 10 === 0) {
+        console.log(
+          `Iteration ${i}, time taken ${
+            Math.round((Date.now() - start) / 10) / 100
+          }s`
+        );
         console.log("   - loss: ", loss);
-        console.log("   - took: ", `${Date.now() - now} ms`);
-        console.log("  - taken: ", `${(Date.now() - startTime) / 1000} s`);
       }
       if (i > 0 && i % epochIterations === 0) {
         validate(network);
       }
-      times.push(Date.now() - now);
     },
     stopCondition: (_, { loss }) => {
       return loss < 0.01 || isNaN(loss);
     },
     afterAll: () => {
-      console.log(
-        "Average time per iteration",
-        times.reduce((avg, x) => avg + x / times.length, 0)
-      );
-
       validate(network);
     },
+  };
+
+  const optimizer = new GradientDescentOptimizer({
+    ...options,
+    momentum: 0,
+    nesterov: false,
   });
 
   const initialBatch = generateBatch(trainData, BATCH_SIZE);
-  const network = new Network(initialBatch, "cross-entropy", gd)
-    .add("sigmoid", 32)
+  const network = new Network(initialBatch, "cross-entropy", optimizer)
+    .add("sigmoid", 512)
     .add("softmax", LABEL_SIZE);
 
-  network.initialize();
-  network.optimize();
+  network.train();
 
   // console.log("Total loss: ", loss);
 };

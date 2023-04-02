@@ -8,17 +8,18 @@ const runXOR = () => {
     [[0, 1], 1],
     [[0, 0], 0],
   ].map((row) => {
-    const [input, output] = row;
-    return { input, output } as DataSet[1];
+    return { input: row[0], output: [row[1]] } as DataSet[1];
   });
 
   const w1 = [
-    [0.5, 0.5, 0.5],
-    [-0.5, -0.5, -0.5],
+    [0, 0.5, 0.5],
+    [-0, -0.5, -0.5],
   ];
-  const w2 = [[-0.5, 0.5, 0.5]];
+  const w2 = [[-0, 0.5, 0.5]];
 
-  const gd = new GradientDescentOptimizer(1, 500, {
+  const gd = new GradientDescentOptimizer({
+    learningRate: 1,
+    maxIterations: 500,
     afterIteration: (_, { loss }, i) => {
       if (i % 20 === 0) {
         console.log("Iteration: ", i);
