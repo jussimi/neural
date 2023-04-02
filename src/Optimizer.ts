@@ -1,3 +1,4 @@
+import { Layer } from "./Layer";
 import { Matrix } from "./Matrix";
 import { Network } from "./Network";
 
@@ -81,6 +82,7 @@ class BaseOptimizer implements Optimizer {
 }
 
 export class GradientDescentOptimizer extends BaseOptimizer {
+  initialized = false;
   velocity: Matrix[] = [];
   momentum: number;
 
@@ -98,7 +100,7 @@ export class GradientDescentOptimizer extends BaseOptimizer {
         options.beforeIteration?.(network, iteration);
         this.currentWeights = network.layers.map((l) => l.weights);
 
-        if (this.velocity.length) {
+        if (this.initialized) {
           network.layers.forEach((l, i) => {
             l.weights = l.weights.sum(this.velocity[i].scale(this.momentum));
           });
@@ -108,8 +110,8 @@ export class GradientDescentOptimizer extends BaseOptimizer {
 
     this.doUpdate = (learningRate, data, network) => {
       const { gradients } = data;
-      if (!this.velocity.length) {
-        this.initializeVelocity(gradients);
+      if (!this.initialized) {
+        this.initialize(gradients);
       }
 
       this.velocity = this.velocity.map((vel, i) => {
@@ -130,14 +132,14 @@ export class GradientDescentOptimizer extends BaseOptimizer {
     };
   }
 
-  private initializeVelocity(gradients: Matrix[]) {
-    this.velocity = gradients.map((grad) => {
-      return grad.scale(0);
-    });
+  private initialize(gradients: Matrix[]) {
+    this.velocity = gradients.map((grad) => grad.scale(0));
+    this.initialized = true;
   }
 }
 
 export class AdaGradOptimizer extends BaseOptimizer {
+  initialized = false;
   gradientSquared: Matrix[] = [];
 
   lambda = Math.pow(10, -7);
@@ -147,8 +149,8 @@ export class AdaGradOptimizer extends BaseOptimizer {
 
     this.doUpdate = (learningRate, data, network) => {
       const { gradients } = data;
-      if (!this.gradientSquared.length) {
-        this.initializeGradientSquared(gradients);
+      if (!this.initialized) {
+        this.initialize(gradients);
       }
 
       this.gradientSquared = this.gradientSquared.map((grad, i) => {
@@ -168,9 +170,67 @@ export class AdaGradOptimizer extends BaseOptimizer {
     };
   }
 
-  private initializeGradientSquared(gradients: Matrix[]) {
-    this.gradientSquared = gradients.map((grad) => {
-      return grad.scale(0);
-    });
+  private initialize(gradients: Matrix[]) {
+    this.gradientSquared = gradients.map((grad) => grad.scale(0));
+    this.initialized = true;
+  }
+}
+
+export class AdaDeltaOptimizer extends BaseOptimizer {
+  initialized = false;
+
+  gradientAverage: Matrix[] = [];
+
+  deltaAverage: Matrix[] = [];
+
+  lambda = Math.pow(10, -7);
+
+  decay: number;
+
+  constructor(options: OptimizerOptions & { decay: number }) {
+    super(options);
+
+    this.decay = options.decay;
+
+    this.doUpdate = (learningRate, data, network) => {
+      const { gradients } = data;
+      if (!this.initialized) {
+        this.initialize(gradients);
+      }
+
+      this.gradientAverage = this.gradientAverage.map((grad, l) => {
+        return this.calcMovingAverage(grad, gradients[l]);
+      });
+
+      network.layers.forEach((layer, l) => {
+        const weights = layer.weights;
+        const weightDelta = this.deltaAverage[l].map((item, i, j) => {
+          const deltaRMS = Math.sqrt(item + this.lambda);
+          const gradRMS = Math.sqrt(
+            this.gradientAverage[l].get(i, j) + this.lambda
+          );
+          return -(deltaRMS / gradRMS) * gradients[l].get(i, j);
+        });
+
+        this.deltaAverage[l] = this.calcMovingAverage(
+          this.deltaAverage[l],
+          weightDelta
+        );
+
+        layer.updateWeights(weights.sum(weightDelta));
+      });
+    };
+  }
+
+  private calcMovingAverage(previous: Matrix, vect: Matrix) {
+    return previous
+      .scale(this.decay)
+      .sum(vect.hadamard(vect).scale(1 - this.decay));
+  }
+
+  private initialize(gradients: Matrix[]) {
+    this.gradientAverage = gradients.map((grad) => grad.scale(0));
+    this.deltaAverage = gradients.map((grad) => grad.scale(0));
+    this.initialized = true;
   }
 }

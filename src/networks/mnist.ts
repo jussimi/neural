@@ -1,5 +1,6 @@
 import { DataSet, Network } from "../Network";
 import {
+  AdaDeltaOptimizer,
   AdaGradOptimizer,
   GradientDescentOptimizer,
   OptimizerOptions,
@@ -86,16 +87,21 @@ const runMnist = () => {
     },
   };
 
-  // const optimizer = new GradientDescentOptimizer({
+  const optimizer = new GradientDescentOptimizer({
+    ...options,
+    momentum: 0,
+    nesterov: false,
+  });
+
+  // const optimizer = new AdaGradOptimizer({
   //   ...options,
-  //   momentum: 0,
-  //   nesterov: false,
+  //   learningRate: 0.01,
   // });
 
-  const optimizer = new AdaGradOptimizer({
-    ...options,
-    learningRate: 0.01,
-  });
+  // const optimizer = new AdaDeltaOptimizer({
+  //   ...options,
+  //   decay: 0.9,
+  // });
 
   const initialBatch = generateBatch(trainData, BATCH_SIZE);
   const network = new Network(initialBatch, "cross-entropy", optimizer)
