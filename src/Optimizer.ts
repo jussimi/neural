@@ -39,7 +39,8 @@ class BaseOptimizer implements Optimizer {
   doUpdate: (
     learningRate: number,
     data: OptimizationState,
-    network: Network
+    network: Network,
+    iteration: number
   ) => void;
 
   constructor(options: OptimizerOptions) {
@@ -72,7 +73,7 @@ class BaseOptimizer implements Optimizer {
         throw new Error("negative learningRate!");
       }
 
-      this.doUpdate(lr, data, network);
+      this.doUpdate(lr, data, network, i);
 
       this.afterIteration?.(network, data, i);
     }
@@ -279,6 +280,75 @@ export class RMSPropOptimizer extends BaseOptimizer {
 
   private initialize(gradients: Matrix[]) {
     this.gradientAverage = gradients.map((grad) => grad.scale(0));
+    this.initialized = true;
+  }
+}
+
+export class AdamOptimizer extends BaseOptimizer {
+  initialized = false;
+
+  gradientAverage: Matrix[] = [];
+  momentAverage: Matrix[] = [];
+
+  lambda = Math.pow(10, -8);
+
+  gradientDecay: number; // beta_1
+  momentDecay: number; // beta_2
+
+  constructor(
+    options: OptimizerOptions & { gradientDecay: number; momentDecay: number }
+  ) {
+    super(options);
+
+    this.gradientDecay = options.gradientDecay;
+    this.momentDecay = options.momentDecay;
+
+    this.doUpdate = (learningRate, data, network, iteration) => {
+      const { gradients } = data;
+      if (!this.initialized) {
+        this.initialize(gradients);
+      }
+
+      this.momentAverage = this.momentAverage.map((mom, l) => {
+        return mom
+          .scale(this.momentDecay)
+          .sum(gradients[l].scale(1 - this.momentDecay));
+      });
+
+      this.gradientAverage = this.gradientAverage.map((grad, l) => {
+        return grad
+          .scale(this.gradientDecay)
+          .sum(
+            gradients[l].hadamard(gradients[l]).scale(1 - this.gradientDecay)
+          );
+      });
+
+      const correctedMoment = this.momentAverage.map((mom) => {
+        return mom.scale(1 / (1 - Math.pow(this.momentDecay, iteration + 1)));
+      });
+
+      const correctedGradient = this.gradientAverage.map((grad) => {
+        return grad.scale(
+          1 / (1 - Math.pow(this.gradientDecay, iteration + 1))
+        );
+      });
+
+      network.layers.forEach((layer, l) => {
+        const weights = layer.weights;
+
+        const weightDelta = correctedGradient[l].map((item, i, j) => {
+          const gradRMS = Math.sqrt(item) + this.lambda;
+          return -(learningRate / gradRMS) * correctedMoment[l].get(i, j);
+        });
+
+        layer.updateWeights(weights.sum(weightDelta));
+      });
+    };
+  }
+
+  private initialize(gradients: Matrix[]) {
+    this.gradientAverage = gradients.map((grad) => grad.scale(0));
+    this.momentAverage = gradients.map((grad) => grad.scale(0));
     this.initialized = true;
   }
 }

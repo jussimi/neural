@@ -2,6 +2,7 @@ import { DataSet, Network } from "../Network";
 import {
   AdaDeltaOptimizer,
   AdaGradOptimizer,
+  AdamOptimizer,
   GradientDescentOptimizer,
   OptimizerOptions,
   RMSPropOptimizer,
@@ -104,9 +105,16 @@ const runMnist = () => {
   //   decay: 0.9,
   // });
 
-  const optimizer = new RMSPropOptimizer({
+  // const optimizer = new RMSPropOptimizer({
+  //   ...options,
+  //   decay: 0.9,
+  //   learningRate: 0.001,
+  // });
+
+  const optimizer = new AdamOptimizer({
     ...options,
-    decay: 0.9,
+    momentDecay: 0.9,
+    gradientDecay: 0.999,
     learningRate: 0.001,
   });
 
