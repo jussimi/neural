@@ -1,0 +1,4 @@
+node_modules/
+mnist_*
+dist/
+target/

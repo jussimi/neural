@@ -12,10 +12,10 @@ const runXOR = () => {
   });
 
   const w1 = [
-    [0, 0.5, 0.5],
-    [-0, -0.5, -0.5],
+    [0.5, 0.5, 0.5],
+    [-0.5, -0.5, -0.5],
   ];
-  const w2 = [[-0, 0.5, 0.5]];
+  const w2 = [[-0.5, 0.5, 0.5]];
 
   const gd = new GradientDescentOptimizer({
     learningRate: 1,
@@ -41,7 +41,9 @@ const runXOR = () => {
     .add("sigmoid", 1);
 
   network.initialize([w1, w2]);
+  console.time();
   network.optimize();
+  console.timeEnd();
 
   console.log("\n");
 

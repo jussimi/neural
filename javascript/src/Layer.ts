@@ -24,10 +24,6 @@ export type ForwardPassResult = {
   error: number;
 };
 
-export type BackwardPassResult = {
-  delta: Matrix;
-};
-
 export class Layer {
   isOutput: boolean = false;
 
