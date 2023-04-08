@@ -7,7 +7,7 @@ export class Matrix {
   M: number;
   N: number;
 
-  private items: Float64Array;
+  items: Float64Array;
 
   constructor(items: Float64Array, M: number, N: number) {
     this.M = M;

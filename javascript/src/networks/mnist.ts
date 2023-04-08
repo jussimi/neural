@@ -4,16 +4,17 @@ import {
   AdaGradOptimizer,
   AdamOptimizer,
   GradientDescentOptimizer,
+  Optimizer,
   OptimizerOptions,
   RMSPropOptimizer,
 } from "../Optimizer";
 
 import fs from "fs";
-import { oneHotEncode, generateBatch } from "../utils";
+import { oneHotEncode, generateBatch, isCorrectCategory } from "../utils";
 
 const LABEL_SIZE = 10;
 const BATCH_SIZE = 200;
-const EPOCHS = 10;
+const EPOCHS = 1;
 
 const readDataSet = (path: string): DataSet => {
   return fs
@@ -37,95 +38,153 @@ const epochIterations = Math.floor(setSize / BATCH_SIZE);
 
 const iterations = epochIterations * EPOCHS;
 
+type ValidationRes = {
+  loss: number;
+  percentage: number;
+};
+type Result = {
+  iteration: number;
+  train: ValidationRes;
+  test: ValidationRes;
+};
+
+const validate = (nn: Network, data: DataSet): ValidationRes => {
+  let totalLoss = 0;
+  let correctCount = 0;
+  data.forEach((point) => {
+    const { loss, estimate } = nn.validate(point);
+    totalLoss += loss;
+    if (isCorrectCategory(estimate, point.output)) {
+      correctCount += 1;
+    }
+  });
+  return {
+    loss: totalLoss / data.length,
+    percentage: correctCount / data.length,
+  };
+};
+
+const schedule = (i: number) => {
+  const initial = 0.5;
+  const decay = 0.1;
+  const min = 0.05;
+  return Math.max(min, initial * (1 / (1 + decay * i)));
+};
+
 const runMnist = () => {
-  const validate = (nn: Network) => {
-    let totalLoss = 0;
-    let correctCount = 0;
-    testData.forEach((point) => {
-      const { loss, estimate } = nn.validate(point);
-      totalLoss += loss / testData.length;
-      const label = point.output.indexOf(1);
-      const values = estimate.transpose().toArrays()[0];
-      const max = Math.max(...values);
-      if (label !== -1 && label === values.indexOf(max)) {
-        correctCount += 1;
-      }
-    });
-    console.log("\nValidation loss: %d", totalLoss);
-    console.log("     percentage: %d", correctCount / testData.length);
-  };
+  let currentTrainingResults: Result[] = [];
 
-  const schedule = (i: number) => {
-    const initial = 0.5;
-    const decay = 0.1;
-    const min = 0.05;
-    return Math.max(min, initial * (1 / (1 + decay * i)));
-  };
-
-  const start = Date.now();
   const options: OptimizerOptions = {
     learningRate: schedule,
     maxIterations: iterations,
-    afterIteration(network, { gradients, loss }, i) {
+    afterIteration(network, { loss }, i) {
       const batch = generateBatch(trainData, BATCH_SIZE);
       network.setData(batch);
-      if (i % 10 === 0) {
-        console.log(
-          `Iteration ${i}, time taken ${
-            Math.round((Date.now() - start) / 10) / 100
-          }s`
-        );
-        console.log("   - loss: ", loss);
-      }
-      if (i > 0 && i % epochIterations === 0) {
-        validate(network);
+      if (i % epochIterations === 0 || i === iterations) {
+        const testRes = validate(network, testData);
+        const trainRes = validate(network, trainData);
+        const result = {
+          iteration: i,
+          train: trainRes,
+          test: testRes,
+        };
+        currentTrainingResults.push(result);
+        console.log(result);
       }
     },
     stopCondition: (_, { loss }) => {
       return loss < 0.01 || isNaN(loss);
     },
-    afterAll: () => {
-      validate(network);
-    },
   };
 
-  // const optimizer = new GradientDescentOptimizer({
-  //   ...options,
-  //   momentum: 0,
-  //   nesterov: false,
-  // });
+  const optimizers: { name: string; optimizer: Optimizer }[] = [
+    {
+      name: "sgd",
+      optimizer: new GradientDescentOptimizer({
+        ...options,
+        momentum: 0,
+        nesterov: false,
+      }),
+    },
+    {
+      name: "momentum",
+      optimizer: new GradientDescentOptimizer({
+        ...options,
+        momentum: 0.5,
+        nesterov: false,
+      }),
+    },
+    {
+      name: "nesterov",
+      optimizer: new GradientDescentOptimizer({
+        ...options,
+        momentum: 0.5,
+        nesterov: true,
+      }),
+    },
+    {
+      name: "AdaGrad",
+      optimizer: new AdaGradOptimizer({
+        ...options,
+        learningRate: 0.01,
+      }),
+    },
+    {
+      name: "AdaDelta",
+      optimizer: new AdaDeltaOptimizer({
+        ...options,
+        decay: 0.9,
+      }),
+    },
+    {
+      name: "RMSProp",
+      optimizer: new RMSPropOptimizer({
+        ...options,
+        decay: 0.9,
+        learningRate: 0.001,
+      }),
+    },
+    {
+      name: "Adam",
+      optimizer: new AdamOptimizer({
+        ...options,
+        momentDecay: 0.9,
+        gradientDecay: 0.999,
+        learningRate: 0.001,
+      }),
+    },
+  ];
 
-  // const optimizer = new AdaGradOptimizer({
-  //   ...options,
-  //   learningRate: 0.01,
-  // });
+  const results: { optimizer: string; took: number; results: Result[] }[] = [];
 
-  // const optimizer = new AdaDeltaOptimizer({
-  //   ...options,
-  //   decay: 0.9,
-  // });
+  for (const { name, optimizer } of optimizers) {
+    console.log("Start %s", name);
+    const start = Date.now();
+    const initialBatch = generateBatch(trainData, BATCH_SIZE);
+    const network = new Network(initialBatch, "cross-entropy", optimizer)
+      .add("sigmoid", 512)
+      .add("softmax", LABEL_SIZE);
 
-  // const optimizer = new RMSPropOptimizer({
-  //   ...options,
-  //   decay: 0.9,
-  //   learningRate: 0.001,
-  // });
+    network.train();
 
-  const optimizer = new AdamOptimizer({
-    ...options,
-    momentDecay: 0.9,
-    gradientDecay: 0.999,
-    learningRate: 0.001,
-  });
+    const took = (Date.now() - start) / 1000;
+    console.log("finished %s. Took %d", name, took);
+    results.push({ optimizer: name, results: currentTrainingResults, took });
+    currentTrainingResults = [];
+  }
 
-  const initialBatch = generateBatch(trainData, BATCH_SIZE);
-  const network = new Network(initialBatch, "cross-entropy", optimizer)
-    .add("sigmoid", 512)
-    .add("softmax", LABEL_SIZE);
+  for (const value of results) {
+    let min = value.results[0];
+    for (const res of value.results) {
+      if (res.test.loss < min.test.loss) {
+        min = res;
+      }
+    }
+    console.log(value.optimizer, min);
+  }
 
-  network.train();
-
-  // console.log("Total loss: ", loss);
+  const fileName = `results-${new Date().toISOString()}.json`;
+  fs.writeFileSync(fileName, JSON.stringify(results));
 };
 
 export default runMnist;

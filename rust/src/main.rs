@@ -24,7 +24,7 @@ fn main() {
 fn run_mnist() {
     const LABEL_SIZE: usize = 10;
     const BATCH_SIZE: u32 = 200;
-    const EPOCHS: u64 = 10;
+    const EPOCHS: u64 = 40;
 
     fn read_data(path: &str) -> Vec<DataSetItem> {
         let mut result = Vec::new();
@@ -89,7 +89,7 @@ fn run_mnist() {
     let iterations = epoch_iterations * EPOCHS;
 
     let mut network = create_network(ErrorFunctionKey::CrossEntropy);
-    network.add(ActivationFunctionKey::Sigmoid, 512);
+    network.add(ActivationFunctionKey::Sigmoid, 32);
     network.add(ActivationFunctionKey::Softmax, 10);
     network.initialize(generate_batch(&train_data, BATCH_SIZE), None);
 
@@ -112,6 +112,7 @@ fn run_mnist() {
             validate(&network, &test_data)
         }
     }
+    validate(&network, &test_data);
 
     println!("Elapsed: {:.2?}", now.elapsed().as_millis());
 }

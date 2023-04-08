@@ -1,3 +1,4 @@
+import { Matrix } from "./Matrix";
 import { DataSet } from "./Network";
 
 /**
@@ -8,6 +9,13 @@ export const oneHotEncode = (label: number, len: number): number[] => {
   const vector = [...Array(len).keys()].map(() => 0);
   vector[label] = 1;
   return vector;
+};
+
+export const isCorrectCategory = (estimate: Matrix, output: number[]) => {
+  const label = output.indexOf(1);
+  const values = estimate.items;
+  const max = Math.max(...values);
+  return label === values.indexOf(max);
 };
 
 export const generateBatch = (dataset: DataSet, batchSize: number): DataSet => {

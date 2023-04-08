@@ -55,7 +55,7 @@ class BaseOptimizer implements Optimizer {
   }
 
   optimize: Optimizer["optimize"] = (network: Network, computeGradients) => {
-    for (let i = 0; i < this.maxIterations; i += 1) {
+    for (let i = 0; i <= this.maxIterations; i += 1) {
       this.beforeIteration?.(network, i);
 
       const data = computeGradients();
