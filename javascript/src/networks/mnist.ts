@@ -157,7 +157,9 @@ const runMnist = () => {
 
   const results: { optimizer: string; took: number; results: Result[] }[] = [];
 
-  for (const { name, optimizer } of optimizers) {
+  for (const { name, optimizer } of optimizers.filter(
+    (x) => x.name.toLocaleLowerCase() === process.argv[2]
+  )) {
     console.log("Start %s", name);
     const start = Date.now();
     const initialBatch = generateBatch(trainData, BATCH_SIZE);
@@ -171,6 +173,9 @@ const runMnist = () => {
     console.log("finished %s. Took %d", name, took);
     results.push({ optimizer: name, results: currentTrainingResults, took });
     currentTrainingResults = [];
+
+    const fileName = `results-${name}-${new Date().toISOString()}.json`;
+    fs.writeFileSync(fileName, JSON.stringify(results));
   }
 
   for (const value of results) {
@@ -182,9 +187,6 @@ const runMnist = () => {
     }
     console.log(value.optimizer, min);
   }
-
-  const fileName = `results-${new Date().toISOString()}.json`;
-  fs.writeFileSync(fileName, JSON.stringify(results));
 };
 
 export default runMnist;
