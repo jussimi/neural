@@ -36,3 +36,13 @@ export const generateBatch = (dataset: DataSet, batchSize: number): DataSet => {
   }
   return set;
 };
+
+export type ValidationRes = {
+  loss: number;
+  percentage: number;
+};
+export type Result = {
+  iteration: number;
+  train: ValidationRes;
+  test: ValidationRes;
+};

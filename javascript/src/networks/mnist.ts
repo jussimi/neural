@@ -10,11 +10,17 @@ import {
 } from "../Optimizer";
 
 import fs from "fs";
-import { oneHotEncode, generateBatch, isCorrectCategory } from "../utils";
+import {
+  oneHotEncode,
+  generateBatch,
+  isCorrectCategory,
+  Result,
+  ValidationRes,
+} from "../utils";
 
 const LABEL_SIZE = 10;
 const BATCH_SIZE = 200;
-const EPOCHS = 1;
+const EPOCHS = 20;
 
 const readDataSet = (path: string): DataSet => {
   return fs
@@ -37,16 +43,6 @@ const setSize = trainData.length;
 const epochIterations = Math.floor(setSize / BATCH_SIZE);
 
 const iterations = epochIterations * EPOCHS;
-
-type ValidationRes = {
-  loss: number;
-  percentage: number;
-};
-type Result = {
-  iteration: number;
-  train: ValidationRes;
-  test: ValidationRes;
-};
 
 const validate = (nn: Network, data: DataSet): ValidationRes => {
   let totalLoss = 0;
@@ -74,12 +70,16 @@ const schedule = (i: number) => {
 const runMnist = () => {
   let currentTrainingResults: Result[] = [];
 
+  let now = Date.now();
   const options: OptimizerOptions = {
     learningRate: schedule,
     maxIterations: iterations,
     afterIteration(network, { loss }, i) {
       const batch = generateBatch(trainData, BATCH_SIZE);
       network.setData(batch);
+      if (i % 50 === 0) {
+        console.log("Took %d", (Date.now() - now) / 1000);
+      }
       if (i % epochIterations === 0 || i === iterations) {
         const testRes = validate(network, testData);
         const trainRes = validate(network, trainData);
@@ -164,7 +164,7 @@ const runMnist = () => {
     const start = Date.now();
     const initialBatch = generateBatch(trainData, BATCH_SIZE);
     const network = new Network(initialBatch, "cross-entropy", optimizer)
-      .add("sigmoid", 512)
+      .add("sigmoid", 128)
       .add("softmax", LABEL_SIZE);
 
     network.train();
