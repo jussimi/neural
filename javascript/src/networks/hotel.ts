@@ -10,35 +10,89 @@ import {
 } from "../Optimizer";
 
 import fs from "fs";
-import {
-  oneHotEncode,
-  generateBatch,
-  isCorrectCategory,
-  Result,
-  ValidationRes,
-} from "../utils";
-import { Matrix } from "../Matrix";
+import { oneHotEncode, generateBatch, ValidationRes } from "../utils";
 
-const LABEL_SIZE = 10;
-const BATCH_SIZE = 200;
-const EPOCHS = 20;
+const BATCH_SIZE = 100;
+const EPOCHS = 30;
 
-const readDataSet = (path: string): DataSet => {
-  return fs
-    .readFileSync(path)
-    .toString()
-    .split("\n")
-    .filter((x) => !!x)
-    .map((line: string) => {
-      const items = line.split(",").map((i) => parseInt(i));
-      const output = oneHotEncode(items.shift() as number, LABEL_SIZE);
-      const input = items.map((i) => i / 255); // Scale values to 0-1.
-      return { input, output };
-    });
+const schedule = (i: number) => {
+  const initial = 0.5;
+  const decay = 0.1;
+  const min = 0.05;
+  return Math.max(min, initial * (1 / (1 + decay * i)));
 };
 
-const trainData = readDataSet("./mnist_train.csv");
-const testData = readDataSet("./mnist_test.csv");
+const [headers, ...rows] = fs
+  .readFileSync("reservations.csv")
+  .toString()
+  .split("\n")
+  .filter((r) => !!r)
+  .map((r) => r.split(","));
+
+const distinctValues: Record<string, Map<string, number>> = {};
+const maxValues: Record<string, number> = {};
+
+headers.forEach((h, i) => {
+  const values: string[] = [];
+
+  for (const row of rows) {
+    const value = row[i];
+    if (!values.includes(value)) {
+      values.push(value);
+    }
+  }
+
+  const isPossiblyCategorical = values.length < 40 && !h.startsWith("no_");
+  const firstValueAsNumber = parseFloat(values[0]);
+  if (isPossiblyCategorical) {
+    const labelMap = new Map();
+    values.forEach((val, i) => labelMap.set(val, i));
+
+    distinctValues[h] = labelMap;
+  } else if (!isNaN(firstValueAsNumber)) {
+    let max = 0;
+    for (const val of values) {
+      const parsed = parseFloat(val);
+      if (parsed > max) {
+        max = parsed;
+      }
+    }
+    maxValues[h] = max;
+  }
+});
+
+const data: DataSet = rows
+  .sort(() => Math.random() - 0.5)
+  .map((values) => {
+    const label: number[] = [];
+    const result: number[] = [];
+    values.forEach((val, i) => {
+      const header = headers[i];
+      if (header === "booking_status") {
+        const value = distinctValues[header].get(val);
+        if (typeof value !== "number") throw new Error("invalid status");
+        label.push(value);
+        return;
+      }
+      const isNumerical = typeof maxValues[header] === "number";
+      if (isNumerical) {
+        result.push(parseFloat(val) / maxValues[header]);
+        return;
+      }
+      const isCategorical = typeof distinctValues[header] !== "undefined";
+      if (isCategorical) {
+        const size = distinctValues[header].size;
+        const value = distinctValues[header].get(val);
+        if (typeof value !== "number") throw new Error("invalid value!");
+        result.push(...oneHotEncode(value, size));
+      }
+    });
+    return { input: result, output: label };
+  });
+
+const splitIndex = Math.ceil(0.3 * data.length);
+const testData = data.slice(0, splitIndex);
+const trainData = data.slice(splitIndex);
 
 const setSize = trainData.length;
 const epochIterations = Math.floor(setSize / BATCH_SIZE);
@@ -48,10 +102,12 @@ const iterations = epochIterations * EPOCHS;
 const validate = (nn: Network, data: DataSet): ValidationRes => {
   let totalLoss = 0;
   let correctCount = 0;
+
   data.forEach((point) => {
     const { loss, estimate } = nn.validate(point);
     totalLoss += loss;
-    if (isCorrectCategory(estimate, point.output)) {
+    const result = Math.round(estimate.get(0, 0));
+    if (result === point.output[0]) {
       correctCount += 1;
     }
   });
@@ -61,26 +117,13 @@ const validate = (nn: Network, data: DataSet): ValidationRes => {
   };
 };
 
-const schedule = (i: number) => {
-  const initial = 0.5;
-  const decay = 0.1;
-  const min = 0.05;
-  return Math.max(min, initial * (1 / (1 + decay * i)));
-};
-
-const runMnist = () => {
-  let currentTrainingResults: Result[] = [];
-
-  let now = Date.now();
+const runHotel = () => {
   const options: OptimizerOptions = {
     learningRate: schedule,
     maxIterations: iterations,
     afterIteration(network, { loss }, i) {
       const batch = generateBatch(trainData, BATCH_SIZE);
       network.setData(batch);
-      if (i % 50 === 0) {
-        console.log("Took %d", (Date.now() - now) / 1000);
-      }
       if (i % epochIterations === 0 || i === iterations) {
         const testRes = validate(network, testData);
         const trainRes = validate(network, trainData);
@@ -89,7 +132,6 @@ const runMnist = () => {
           train: trainRes,
           test: testRes,
         };
-        currentTrainingResults.push(result);
         console.log(result);
       }
     },
@@ -97,11 +139,11 @@ const runMnist = () => {
       return isNaN(loss);
     },
   };
-
   const initialBatch = generateBatch(trainData, BATCH_SIZE);
-  const network = new Network(initialBatch, "cross-entropy");
+
+  const network = new Network(initialBatch, "log-loss");
   network.add("relu", 128);
-  network.add("softmax", LABEL_SIZE);
+  network.add("sigmoid", 1);
 
   const optimizers: { name: string; optimizer: Optimizer }[] = [
     {
@@ -161,8 +203,6 @@ const runMnist = () => {
     },
   ];
 
-  const results: { optimizer: string; took: number; results: Result[] }[] = [];
-
   for (const { name, optimizer } of optimizers) {
     console.log("Start %s", name);
     const start = Date.now();
@@ -172,22 +212,7 @@ const runMnist = () => {
 
     const took = (Date.now() - start) / 1000;
     console.log("finished %s. Took %d", name, took);
-    results.push({ optimizer: name, results: currentTrainingResults, took });
-    currentTrainingResults = [];
   }
-
-  for (const value of results) {
-    let min = value.results[0];
-    for (const res of value.results) {
-      if (res.test.loss < min.test.loss) {
-        min = res;
-      }
-    }
-    console.log(value.optimizer, min);
-  }
-
-  const fileName = `results-${new Date().toISOString()}.json`;
-  fs.writeFileSync(fileName, JSON.stringify(results));
 };
 
-export default runMnist;
+export default runHotel;

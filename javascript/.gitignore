@@ -1,5 +1,5 @@
 node_modules/
-mnist_*
+*.csv
 dist/
 target/
 results-*

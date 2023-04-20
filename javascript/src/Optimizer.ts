@@ -1,6 +1,7 @@
 import { Layer } from "./Layer";
 import { Matrix } from "./Matrix";
 import { Network } from "./Network";
+import { Result } from "./utils";
 
 type OptimizationState = { loss: number; gradients: Matrix[] };
 type OptimizerOptionFN<T> = (
@@ -19,15 +20,13 @@ export type OptimizerOptions = {
 };
 
 export type Optimizer = {
-  optimize: (
-    network: Network,
-    computeGradients: () => OptimizationState
-  ) => void;
+  optimize: () => void;
 } & OptimizerOptions;
 
 type LearningRate = number | ((iteration: number) => number);
 
 class BaseOptimizer implements Optimizer {
+  network: Network;
   learningRate: LearningRate;
   maxIterations: number;
 
@@ -39,28 +38,35 @@ class BaseOptimizer implements Optimizer {
   doUpdate: (
     learningRate: number,
     data: OptimizationState,
-    network: Network,
     iteration: number
-  ) => void;
+  ) => void = () => {};
 
-  constructor(options: OptimizerOptions) {
+  constructor(network: Network, options: OptimizerOptions) {
     this.learningRate = options.learningRate;
     this.maxIterations = options.maxIterations;
+    this.network = network;
 
     this.beforeIteration = options.beforeIteration;
     this.afterIteration = options.afterIteration;
     this.stopCondition = options.stopCondition;
     this.afterAll = options.afterAll;
-    this.doUpdate = () => {};
   }
 
-  optimize: Optimizer["optimize"] = (network: Network, computeGradients) => {
+  computeGradients = () => {
+    const result = this.network.computeGradient();
+    return {
+      gradients: result.gradient,
+      loss: result.loss,
+    };
+  };
+
+  optimize: Optimizer["optimize"] = () => {
     for (let i = 0; i <= this.maxIterations; i += 1) {
-      this.beforeIteration?.(network, i);
+      this.beforeIteration?.(this.network, i);
 
-      const data = computeGradients();
+      const data = this.computeGradients();
 
-      if (this.stopCondition?.(network, data, i)) {
+      if (this.stopCondition?.(this.network, data, i)) {
         break;
       }
 
@@ -73,9 +79,9 @@ class BaseOptimizer implements Optimizer {
         throw new Error("negative learningRate!");
       }
 
-      this.doUpdate(lr, data, network, i);
+      this.doUpdate(lr, data, i);
 
-      this.afterIteration?.(network, data, i);
+      this.afterIteration?.(this.network, data, i);
     }
 
     this.afterAll?.();
@@ -90,9 +96,10 @@ export class GradientDescentOptimizer extends BaseOptimizer {
   currentWeights: Matrix[] = [];
 
   constructor(
+    network: Network,
     options: OptimizerOptions & { momentum?: number; nesterov?: boolean }
   ) {
-    super(options);
+    super(network, options);
 
     this.momentum = options.momentum || 0;
 
@@ -109,7 +116,7 @@ export class GradientDescentOptimizer extends BaseOptimizer {
       };
     }
 
-    this.doUpdate = (learningRate, data, network) => {
+    this.doUpdate = (learningRate, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -145,10 +152,10 @@ export class AdaGradOptimizer extends BaseOptimizer {
 
   lambda = Math.pow(10, -7);
 
-  constructor(options: OptimizerOptions) {
-    super(options);
+  constructor(network: Network, options: OptimizerOptions) {
+    super(network, options);
 
-    this.doUpdate = (learningRate, data, network) => {
+    this.doUpdate = (learningRate, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -188,12 +195,12 @@ export class AdaDeltaOptimizer extends BaseOptimizer {
 
   decay: number;
 
-  constructor(options: OptimizerOptions & { decay: number }) {
-    super(options);
+  constructor(network: Network, options: OptimizerOptions & { decay: number }) {
+    super(network, options);
 
     this.decay = options.decay;
 
-    this.doUpdate = (learningRate, data, network) => {
+    this.doUpdate = (_, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -245,12 +252,12 @@ export class RMSPropOptimizer extends BaseOptimizer {
 
   decay: number;
 
-  constructor(options: OptimizerOptions & { decay: number }) {
-    super(options);
+  constructor(network: Network, options: OptimizerOptions & { decay: number }) {
+    super(network, options);
 
     this.decay = options.decay;
 
-    this.doUpdate = (learningRate, data, network) => {
+    this.doUpdate = (learningRate, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -296,14 +303,15 @@ export class AdamOptimizer extends BaseOptimizer {
   momentDecay: number; // beta_2
 
   constructor(
+    network: Network,
     options: OptimizerOptions & { gradientDecay: number; momentDecay: number }
   ) {
-    super(options);
+    super(network, options);
 
     this.gradientDecay = options.gradientDecay;
     this.momentDecay = options.momentDecay;
 
-    this.doUpdate = (learningRate, data, network, iteration) => {
+    this.doUpdate = (learningRate, data, iteration) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);

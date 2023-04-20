@@ -2,9 +2,25 @@ import Plot from "react-plotly.js";
 import { Data } from "plotly.js";
 import results from "../results.json";
 
-const flatData = results.flat();
+const trainLossDatas: Data[] = results.map((res) => {
+  return {
+    name: res.optimizer,
+    x: res.results.map((r) => r.iteration / 300),
+    y: res.results.map((r) => r.train.loss),
+    type: "scatter",
+  };
+});
 
-const lossDatas: Data[] = flatData.map((res) => {
+const trainPercentages: Data[] = results.map((res) => {
+  return {
+    name: res.optimizer,
+    x: res.results.map((r) => r.iteration / 300),
+    y: res.results.map((r) => r.train.percentage),
+    type: "scatter",
+  };
+});
+
+const testLossDatas: Data[] = results.map((res) => {
   return {
     name: res.optimizer,
     x: res.results.map((r) => r.iteration / 300),
@@ -13,7 +29,7 @@ const lossDatas: Data[] = flatData.map((res) => {
   };
 });
 
-const percentages: Data[] = flatData.map((res) => {
+const testPercentages: Data[] = results.map((res) => {
   return {
     name: res.optimizer,
     x: res.results.map((r) => r.iteration / 300),
@@ -22,13 +38,17 @@ const percentages: Data[] = flatData.map((res) => {
   };
 });
 
+for (const res of results) {
+  console.log(res.optimizer, res.results[res.results.length - 1]);
+}
+
 function App() {
   return (
     <div className="App">
       <Plot
-        data={lossDatas}
+        data={trainLossDatas}
         layout={{
-          width: 1600,
+          width: 1200,
           height: 960,
           title: "Opetusjoukon virhe",
           xaxis: {
@@ -38,12 +58,15 @@ function App() {
           yaxis: {
             title: "Virhe",
           },
+          font: {
+            size: 20,
+          },
         }}
       />
       <Plot
-        data={percentages}
+        data={trainPercentages}
         layout={{
-          width: 1600,
+          width: 1200,
           height: 960,
           title: "Opetusjoukon luokittelutarkkuus",
           xaxis: {
@@ -52,6 +75,47 @@ function App() {
           },
           yaxis: {
             title: "Luokittelutarkkuus",
+          },
+          font: {
+            size: 20,
+          },
+        }}
+      />
+
+      <Plot
+        data={testLossDatas}
+        layout={{
+          width: 1200,
+          height: 960,
+          title: "Testijoukon virhe",
+          xaxis: {
+            title: "Epookki",
+            dtick: 1,
+          },
+          yaxis: {
+            title: "Virhe",
+          },
+          font: {
+            size: 20,
+          },
+        }}
+      />
+
+      <Plot
+        data={testPercentages}
+        layout={{
+          width: 1200,
+          height: 960,
+          title: "Testijoukon tarkkuus",
+          xaxis: {
+            title: "Epookki",
+            dtick: 1,
+          },
+          yaxis: {
+            title: "Tarkkuus",
+          },
+          font: {
+            size: 20,
           },
         }}
       />

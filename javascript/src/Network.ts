@@ -2,34 +2,21 @@ import { ActivationFunctionKey, Identity } from "./activation";
 import { ErrorFunctionKey } from "./error";
 import { ForwardPassResult, Layer } from "./Layer";
 import { Matrix } from "./Matrix";
-import { Optimizer } from "./Optimizer";
+import { randomWeights } from "./utils";
 
 export type DataSet = { input: number[]; output: number[] }[];
 export class Network {
   error: ErrorFunctionKey;
   dataset: DataSet;
-  optimizer: Optimizer;
   layers: Layer[] = [];
 
-  constructor(dataset: DataSet, error: ErrorFunctionKey, optimizer: Optimizer) {
+  constructor(dataset: DataSet, error: ErrorFunctionKey) {
     this.dataset = dataset;
     this.error = error;
-    this.optimizer = optimizer;
   }
 
   setData = (dataset: DataSet) => {
     this.dataset = dataset;
-  };
-
-  optimize = () => {
-    const computeGradients = () => {
-      const result = this.computeGradient();
-      return {
-        gradients: result.gradient,
-        loss: result.loss,
-      };
-    };
-    this.optimizer.optimize(this, computeGradients);
   };
 
   computeGradient = () => {
@@ -40,11 +27,25 @@ export class Network {
     const results = this.dataset.map(({ input, output: expected }) => {
       const result = this.computeResult(
         Matrix.fromList(input),
-        Matrix.fromList(expected),
-        totalGradient
+        Matrix.fromList(expected)
       );
 
-      // Calculate total-loss and total-gradient.
+      // Update total gradient.
+      const { activatedInput, results } = result;
+      for (let l = 0; l < totalGradient.length; l += 1) {
+        const weights = totalGradient[l];
+        const activations = l === 0 ? activatedInput : results[l - 1].activated;
+        const delta = result.deltas[l];
+        for (let i = 0; i < weights.M; i += 1) {
+          for (let j = 0; j < weights.N; j += 1) {
+            const diff = delta.get(i, 0) * activations.get(j, 0);
+            const newValue = weights.get(i, j) + diff / this.dataset.length;
+            weights.set(i, j, newValue);
+          }
+        }
+      }
+
+      // Calculate total-loss.
       totalLoss += result.loss / this.dataset.length;
 
       return {
@@ -61,13 +62,17 @@ export class Network {
     };
   };
 
-  computeResult = (realInput: Matrix, expected: Matrix, total: Matrix[]) => {
+  computeResult = (realInput: Matrix, expected: Matrix) => {
     // Calculates neuron-sums and activations for each layer.
     const data = this.forwardPass(realInput, expected);
 
     // Backropagate
-    this.backwardPass(data.activatedInput, expected, data.results, total);
-    return data;
+    const deltas = this.backwardPass(expected, data.results);
+
+    return {
+      ...data,
+      deltas,
+    };
   };
 
   forwardPass = (input: Matrix, expected: Matrix) => {
@@ -94,12 +99,7 @@ export class Network {
     };
   };
 
-  backwardPass = (
-    input: Matrix,
-    expected: Matrix,
-    results: ForwardPassResult[],
-    total: Matrix[]
-  ) => {
+  backwardPass = (expected: Matrix, results: ForwardPassResult[]) => {
     const resultOut = results[results.length - 1];
 
     const layerOut = this.layers[this.layers.length - 1];
@@ -120,18 +120,7 @@ export class Network {
       deltas.unshift(delta);
     }
 
-    for (let l = 0; l < total.length; l += 1) {
-      const weights = total[l];
-      const activations = l === 0 ? input : results[l - 1].activated;
-      const delta = deltas[l];
-      for (let i = 0; i < weights.M; i += 1) {
-        for (let j = 0; j < weights.N; j += 1) {
-          const diff = delta.get(i, 0) * activations.get(j, 0);
-          const newValue = weights.get(i, j) + diff / this.dataset.length;
-          weights.set(i, j, newValue);
-        }
-      }
-    }
+    return deltas;
   };
 
   validate = ({ input, output }: DataSet[1]) => {
@@ -139,18 +128,7 @@ export class Network {
   };
 
   add = (activation: ActivationFunctionKey, neuronCount: number) => {
-    const layers = [
-      ...this.layers,
-      new Layer(activation, neuronCount, this.error),
-    ];
-    const clone = new Network(this.dataset, this.error, this.optimizer);
-    clone.layers = layers;
-    return clone;
-  };
-
-  train = () => {
-    this.initialize();
-    this.optimize();
+    this.layers.push(new Layer(activation, neuronCount, this.error));
   };
 
   initialize = (weights?: number[][][]) => {
@@ -182,21 +160,4 @@ export class Network {
       layer.initialize(Matrix.fromArrays(w), l === this.layers.length - 1);
     });
   };
-}
-
-function randomWeights(m: number, n: number) {
-  const result: number[][] = [];
-  for (let i = 0; i < m; i += 1) {
-    let row: number[] = [];
-    row[0] = 0;
-    for (let j = 1; j < n; j += 1) {
-      row.push(getRandomBetween(-0.5, 0.5));
-    }
-    result.push(row);
-  }
-  return result;
-}
-
-function getRandomBetween(min: number, max: number) {
-  return Math.random() * (max - min) + min;
 }

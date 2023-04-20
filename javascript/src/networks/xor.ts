@@ -17,7 +17,11 @@ const runXOR = () => {
   ];
   const w2 = [[-0.5, 0.5, 0.5]];
 
-  const gd = new GradientDescentOptimizer({
+  const network = new Network(dataSet, "log-loss");
+  network.add("tanh", 2);
+  network.add("sigmoid", 1);
+
+  const gd = new GradientDescentOptimizer(network, {
     learningRate: 1,
     maxIterations: 500,
     afterIteration: (_, { loss }, i) => {
@@ -36,13 +40,10 @@ const runXOR = () => {
     },
   });
 
-  const network = new Network(dataSet, "log-loss", gd)
-    .add("tanh", 2)
-    .add("sigmoid", 1);
-
   network.initialize([w1, w2]);
   console.time();
-  network.optimize();
+  network.initialize();
+  gd.optimize();
   console.timeEnd();
 
   console.log("\n");

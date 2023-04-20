@@ -112,6 +112,7 @@ function SoftmaxFn(vect: Matrix) {
   return res;
 }
 
+// Ensures that the result is not 0 or infinity.
 function clampedExp(x: number) {
   const range = 500;
   const clamped = Math.min(Math.max(-range, x), range);

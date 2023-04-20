@@ -37,6 +37,23 @@ export const generateBatch = (dataset: DataSet, batchSize: number): DataSet => {
   return set;
 };
 
+export function randomWeights(m: number, n: number) {
+  const result: number[][] = [];
+  for (let i = 0; i < m; i += 1) {
+    let row: number[] = [];
+    row[0] = 0;
+    for (let j = 1; j < n; j += 1) {
+      row.push(getRandomBetween(-0.5, 0.5));
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+export function getRandomBetween(min: number, max: number) {
+  return Math.random() * (max - min) + min;
+}
+
 export type ValidationRes = {
   loss: number;
   percentage: number;
