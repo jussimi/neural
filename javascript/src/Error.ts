@@ -5,6 +5,32 @@ export type ErrorFN = {
   grad: (output: Matrix, expected: Matrix) => Matrix;
 };
 
+export class ErrorFunction implements ErrorFN {
+  type: ErrorFunctionKey;
+  loss: (output: Matrix, expected: Matrix) => number;
+  grad: (output: Matrix, expected: Matrix) => Matrix;
+
+  constructor(type: ErrorFunctionKey) {
+    let error: ErrorFN;
+    switch (type) {
+      case "cross-entropy":
+        error = CELoss;
+        break;
+      case "log-loss":
+        error = LogLoss;
+        break;
+      case "mean-squared":
+        error = MSELoss;
+        break;
+      default:
+        throw new Error("Invalid error function");
+    }
+    this.type = type;
+    this.loss = error.loss;
+    this.grad = error.grad;
+  }
+}
+
 /**
  * Binary cross-entropy.
  */

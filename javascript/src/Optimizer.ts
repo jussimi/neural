@@ -265,7 +265,7 @@ export class AdaDeltaOptimizer extends BaseOptimizer {
       }
 
       this.gradientAverage = this.gradientAverage.map((grad, l) => {
-        return this.calcMovingAverage(grad, gradients[l]);
+        return calcMovingAverage(grad, gradients[l], this.decay);
       });
 
       network.layers.forEach((layer, l) => {
@@ -278,20 +278,15 @@ export class AdaDeltaOptimizer extends BaseOptimizer {
           return -(deltaRMS / gradRMS) * gradients[l].get(i, j);
         });
 
-        this.deltaAverage[l] = this.calcMovingAverage(
+        this.deltaAverage[l] = calcMovingAverage(
           this.deltaAverage[l],
-          weightDelta
+          weightDelta,
+          this.decay
         );
 
         layer.updateWeights(weights.sum(weightDelta));
       });
     };
-  }
-
-  private calcMovingAverage(previous: Matrix, vect: Matrix) {
-    return previous
-      .scale(this.decay)
-      .sum(vect.hadamard(vect).scale(1 - this.decay));
   }
 
   private initialize(gradients: Matrix[]) {
@@ -322,7 +317,7 @@ export class RMSPropOptimizer extends BaseOptimizer {
       }
 
       this.gradientAverage = this.gradientAverage.map((grad, l) => {
-        return this.calcMovingAverage(grad, gradients[l]);
+        return calcMovingAverage(grad, gradients[l], this.decay);
       });
 
       network.layers.forEach((layer, l) => {
@@ -335,12 +330,6 @@ export class RMSPropOptimizer extends BaseOptimizer {
         layer.updateWeights(weights.sum(weightDelta));
       });
     };
-  }
-
-  private calcMovingAverage(previous: Matrix, vect: Matrix) {
-    return previous
-      .scale(this.decay)
-      .sum(vect.hadamard(vect).scale(1 - this.decay));
   }
 
   private initialize(gradients: Matrix[]) {
@@ -418,3 +407,7 @@ export class AdamOptimizer extends BaseOptimizer {
     this.initialized = true;
   }
 }
+
+const calcMovingAverage = (previous: Matrix, vect: Matrix, decay: number) => {
+  return previous.scale(decay).sum(vect.hadamard(vect).scale(1 - decay));
+};

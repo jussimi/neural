@@ -1,12 +1,5 @@
-import {
-  ActivationFN,
-  ActivationFunctionKey,
-  ReLu,
-  Sigmoid,
-  Softmax,
-  TanH,
-} from "./activation";
-import { CELoss, ErrorFN, ErrorFunctionKey, LogLoss, MSELoss } from "./error";
+import { ActivationFunction, ActivationFunctionKey } from "./Activation";
+import { ErrorFunction, ErrorFunctionKey } from "./Error";
 import { Matrix } from "./Matrix";
 
 export type ForwardPassResult = {
@@ -34,13 +27,9 @@ export class Layer {
   // Transposed weights array, where bias terms have been omitted.
   weightsTranspose: Matrix = Matrix.fromList([]);
 
-  private activationKey: ActivationFunctionKey;
+  activation: ActivationFunction;
 
-  private activation: ActivationFN;
-
-  private errorKey: ErrorFunctionKey;
-
-  private error: ErrorFN = CELoss;
+  error: ErrorFunction;
 
   constructor(
     activation: ActivationFunctionKey,
@@ -48,39 +37,9 @@ export class Layer {
     error: ErrorFunctionKey
   ) {
     this.neuronCount = neuronCount;
-    this.activationKey = activation;
-    this.errorKey = error;
 
-    switch (activation) {
-      case "softmax":
-        this.activation = Softmax;
-        break;
-      case "sigmoid":
-        this.activation = Sigmoid;
-        break;
-      case "tanh":
-        this.activation = TanH;
-        break;
-      case "relu":
-        this.activation = ReLu;
-        break;
-      default:
-        throw new Error("Invalid activation function");
-    }
-
-    switch (error) {
-      case "cross-entropy":
-        this.error = CELoss;
-        break;
-      case "log-loss":
-        this.error = LogLoss;
-        break;
-      case "mean-squared":
-        this.error = MSELoss;
-        break;
-      default:
-        throw new Error("Invalid error function");
-    }
+    this.activation = new ActivationFunction(activation);
+    this.error = new ErrorFunction(error);
   }
 
   /**
@@ -117,8 +76,8 @@ export class Layer {
    *  - Example of cross-entropy with softmax activation.
    */
   outputPass = (result: ForwardPassResult, expected: Matrix) => {
-    if (this.activationKey === "softmax") {
-      if (this.errorKey !== "cross-entropy") {
+    if (this.activation.type === "softmax") {
+      if (this.error.type !== "cross-entropy") {
         throw new Error("Can only use softmax with cross-entropy");
       }
       return this.activation.output(result.activated, expected);

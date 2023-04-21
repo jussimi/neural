@@ -8,6 +8,38 @@ export type ActivationFN = {
   output: (output: Matrix, expected: Matrix) => Matrix;
 };
 
+export class ActivationFunction implements ActivationFN {
+  type: ActivationFunctionKey;
+
+  forward: (sum: Matrix, isOutput: boolean) => Matrix;
+  backward: (sum: Matrix) => Matrix;
+  output: (output: Matrix, expected: Matrix) => Matrix;
+
+  constructor(type: ActivationFunctionKey) {
+    let activation: ActivationFN;
+    switch (type) {
+      case "softmax":
+        activation = Softmax;
+        break;
+      case "sigmoid":
+        activation = Sigmoid;
+        break;
+      case "tanh":
+        activation = TanH;
+        break;
+      case "relu":
+        activation = ReLu;
+        break;
+      default:
+        throw new Error("Invalid activation function");
+    }
+    this.type = type;
+    this.backward = activation.backward;
+    this.forward = activation.forward;
+    this.output = activation.output;
+  }
+}
+
 export const ReLu: ActivationFN = {
   forward: (sum, isOutput) => activate(ScalarReLu.forward, sum, !isOutput),
   backward: (sum) => backpropagate(ScalarReLu.backward, sum),

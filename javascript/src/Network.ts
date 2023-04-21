@@ -1,6 +1,6 @@
-import { ActivationFunctionKey, Identity } from "./activation";
+import { ActivationFunctionKey, Identity } from "./Activation";
 import { Dataset, DatasetItem } from "./Dataset";
-import { ErrorFunctionKey } from "./error";
+import { ErrorFunctionKey } from "./Error";
 import { ForwardPassResult, Layer } from "./Layer";
 import { Matrix } from "./Matrix";
 import { isCorrectCategory, randomWeights } from "./utils";
