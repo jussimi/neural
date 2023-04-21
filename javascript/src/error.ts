@@ -5,6 +5,9 @@ export type ErrorFN = {
   grad: (output: Matrix, expected: Matrix) => Matrix;
 };
 
+/**
+ * Binary cross-entropy.
+ */
 export const LogLoss: ErrorFN = {
   loss: (output, expected) => {
     const t = output.get(0, 0);
@@ -19,6 +22,9 @@ export const LogLoss: ErrorFN = {
   },
 };
 
+/**
+ * Cross-entropy.
+ */
 export const CELoss: ErrorFN = {
   loss: (output, expected) => {
     const result = output.map(Math.log).transpose().multiply(expected);
@@ -32,6 +38,9 @@ export const CELoss: ErrorFN = {
   },
 };
 
+/**
+ * Mean squared error.
+ */
 export const MSELoss: ErrorFN = {
   loss: (output, expected) => {
     let sum = 0;

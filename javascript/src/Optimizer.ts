@@ -1,7 +1,5 @@
-import { Layer } from "./Layer";
 import { Matrix } from "./Matrix";
-import { Network } from "./Network";
-import { Result } from "./utils";
+import { Network, SetResult } from "./Network";
 
 type OptimizationState = { loss: number; gradients: Matrix[] };
 type OptimizerOptionFN<T> = (
@@ -11,8 +9,8 @@ type OptimizerOptionFN<T> = (
 ) => T;
 
 export type OptimizerOptions = {
+  epochs: number;
   learningRate: LearningRate;
-  maxIterations: number;
   beforeIteration?: (network: Network, iteration: number) => void;
   afterIteration?: OptimizerOptionFN<void>;
   stopCondition?: OptimizerOptionFN<boolean>;
@@ -20,15 +18,21 @@ export type OptimizerOptions = {
 };
 
 export type Optimizer = {
-  optimize: () => void;
+  optimize: () => { results: EpochResult[]; took: number };
 } & OptimizerOptions;
 
 type LearningRate = number | ((iteration: number) => number);
 
+export type EpochResult = {
+  train: SetResult;
+  test: SetResult;
+  took: number;
+};
+
 class BaseOptimizer implements Optimizer {
   network: Network;
   learningRate: LearningRate;
-  maxIterations: number;
+  epochs: number;
 
   beforeIteration: OptimizerOptions["beforeIteration"];
   afterIteration: OptimizerOptions["afterIteration"];
@@ -43,7 +47,7 @@ class BaseOptimizer implements Optimizer {
 
   constructor(network: Network, options: OptimizerOptions) {
     this.learningRate = options.learningRate;
-    this.maxIterations = options.maxIterations;
+    this.epochs = options.epochs;
     this.network = network;
 
     this.beforeIteration = options.beforeIteration;
@@ -61,30 +65,84 @@ class BaseOptimizer implements Optimizer {
   };
 
   optimize: Optimizer["optimize"] = () => {
-    for (let i = 0; i <= this.maxIterations; i += 1) {
-      this.beforeIteration?.(this.network, i);
+    this.network.initialize();
 
-      const data = this.computeGradients();
+    const trainSet = this.network.trainSet;
+    const testSet = this.network.testSet;
+    const setSize = trainSet.items.length;
+    const iterationsPerEpoch = Math.floor(setSize / trainSet.batchSize);
 
-      if (this.stopCondition?.(this.network, data, i)) {
-        break;
+    const trainStart = Date.now();
+    const results: EpochResult[] = [];
+
+    const validateSets = (epochStart: number) => {
+      const trainRes = this.network.validateDataset(trainSet.items);
+      const testRes = this.network.validateDataset(testSet?.items || []);
+      const result: EpochResult = {
+        train: trainRes,
+        test: testRes,
+        took: Date.now() - epochStart,
+      };
+      console.log();
+      console.log(result);
+      results.push(result);
+    };
+
+    validateSets(trainStart);
+
+    let lastLog = Date.now();
+    outer: for (let epoch = 0; epoch < this.epochs; epoch += 1) {
+      const start = Date.now();
+      for (let index = 0; index < iterationsPerEpoch; index += 1) {
+        // Print progress every 100ms.
+        if (
+          Date.now() - lastLog > 100 ||
+          index === 0 ||
+          index === iterationsPerEpoch - 1
+        ) {
+          process.stdout.cursorTo(0);
+          process.stdout.write(
+            `Epoch ${epoch + 1}: ${index + 1} / ${iterationsPerEpoch} (${
+              (Date.now() - start) / 1000
+            }s)`
+          );
+          lastLog = Date.now();
+        }
+
+        const i = epoch * iterationsPerEpoch + index;
+
+        this.beforeIteration?.(this.network, i);
+
+        // STEP 1: Computes gradients. (forward and backward pass)
+        const data = this.computeGradients();
+
+        if (this.stopCondition?.(this.network, data, i)) {
+          break outer;
+        }
+
+        const lr =
+          typeof this.learningRate === "function"
+            ? this.learningRate(i)
+            : this.learningRate;
+
+        if (lr < 0) {
+          throw new Error("negative learningRate!");
+        }
+
+        // STEP 2: Calls the update function of the optimizer.
+        this.doUpdate(lr, data, i);
+
+        this.afterIteration?.(this.network, data, i);
+
+        // STEP 3: Create a new batch of data.
+        const batch = this.network.trainSet.generateBatch();
+        this.network.setBatch(batch);
       }
-
-      const lr =
-        typeof this.learningRate === "function"
-          ? this.learningRate(i)
-          : this.learningRate;
-
-      if (lr < 0) {
-        throw new Error("negative learningRate!");
-      }
-
-      this.doUpdate(lr, data, i);
-
-      this.afterIteration?.(this.network, data, i);
+      validateSets(start);
     }
+    const took = (Date.now() - trainStart) / 1000;
 
-    this.afterAll?.();
+    return { took, results };
   };
 }
 
@@ -93,7 +151,7 @@ export class GradientDescentOptimizer extends BaseOptimizer {
   velocity: Matrix[] = [];
   momentum: number;
 
-  currentWeights: Matrix[] = [];
+  nesterovWeights: Matrix[] = [];
 
   constructor(
     network: Network,
@@ -106,7 +164,7 @@ export class GradientDescentOptimizer extends BaseOptimizer {
     if (options.nesterov) {
       this.beforeIteration = (network, iteration) => {
         options.beforeIteration?.(network, iteration);
-        this.currentWeights = network.layers.map((l) => l.weights);
+        this.nesterovWeights = network.layers.map((l) => l.weights);
 
         if (this.initialized) {
           network.layers.forEach((l, i) => {
@@ -131,7 +189,7 @@ export class GradientDescentOptimizer extends BaseOptimizer {
       network.layers.forEach((layer, i) => {
         let weights: Matrix;
         if (options.nesterov) {
-          weights = this.currentWeights[i];
+          weights = this.nesterovWeights[i];
         } else {
           weights = layer.weights;
         }

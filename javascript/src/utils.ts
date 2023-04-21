@@ -1,5 +1,4 @@
 import { Matrix } from "./Matrix";
-import { DataSet } from "./Network";
 
 /**
  * Returns one-hot encoded list of specified length.
@@ -18,25 +17,6 @@ export const isCorrectCategory = (estimate: Matrix, output: number[]) => {
   return label === values.indexOf(max);
 };
 
-export const generateBatch = (dataset: DataSet, batchSize: number): DataSet => {
-  const set: DataSet = [];
-  const usedIndices = new Map<number, number>();
-
-  while (set.length < batchSize) {
-    inner: while (true) {
-      const nextIndex = Math.floor(Math.random() * dataset.length);
-      if (usedIndices.has(nextIndex)) {
-        continue;
-      }
-      usedIndices.set(nextIndex, 1);
-      const data = dataset[nextIndex];
-      set.push(data);
-      break inner;
-    }
-  }
-  return set;
-};
-
 export function randomWeights(m: number, n: number) {
   const result: number[][] = [];
   for (let i = 0; i < m; i += 1) {
@@ -53,13 +33,3 @@ export function randomWeights(m: number, n: number) {
 export function getRandomBetween(min: number, max: number) {
   return Math.random() * (max - min) + min;
 }
-
-export type ValidationRes = {
-  loss: number;
-  percentage: number;
-};
-export type Result = {
-  iteration: number;
-  train: ValidationRes;
-  test: ValidationRes;
-};

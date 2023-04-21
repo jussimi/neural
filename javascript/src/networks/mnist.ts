@@ -1,30 +1,20 @@
-import { DataSet, Network } from "../Network";
-import {
-  AdaDeltaOptimizer,
-  AdaGradOptimizer,
-  AdamOptimizer,
-  GradientDescentOptimizer,
-  Optimizer,
-  OptimizerOptions,
-  RMSPropOptimizer,
-} from "../Optimizer";
+import { Network } from "../Network";
+import { OptimizerOptions } from "../Optimizer";
 
 import fs from "fs";
-import {
-  oneHotEncode,
-  generateBatch,
-  isCorrectCategory,
-  Result,
-  ValidationRes,
-} from "../utils";
-import { Matrix } from "../Matrix";
+import { Dataset } from "../Dataset";
+import { oneHotEncode } from "../utils";
+import { runOptimizerComparison } from "./shared";
 
 const LABEL_SIZE = 10;
 const BATCH_SIZE = 200;
 const EPOCHS = 20;
 
-const readDataSet = (path: string): DataSet => {
-  return fs
+const readDataSet = (
+  path: string,
+  batchSize: number | undefined = undefined
+): Dataset => {
+  const items = fs
     .readFileSync(path)
     .toString()
     .split("\n")
@@ -35,31 +25,11 @@ const readDataSet = (path: string): DataSet => {
       const input = items.map((i) => i / 255); // Scale values to 0-1.
       return { input, output };
     });
+  return new Dataset(items, batchSize);
 };
 
-const trainData = readDataSet("./mnist_train.csv");
+const trainData = readDataSet("./mnist_train.csv", BATCH_SIZE);
 const testData = readDataSet("./mnist_test.csv");
-
-const setSize = trainData.length;
-const epochIterations = Math.floor(setSize / BATCH_SIZE);
-
-const iterations = epochIterations * EPOCHS;
-
-const validate = (nn: Network, data: DataSet): ValidationRes => {
-  let totalLoss = 0;
-  let correctCount = 0;
-  data.forEach((point) => {
-    const { loss, estimate } = nn.validate(point);
-    totalLoss += loss;
-    if (isCorrectCategory(estimate, point.output)) {
-      correctCount += 1;
-    }
-  });
-  return {
-    loss: totalLoss / data.length,
-    percentage: correctCount / data.length,
-  };
-};
 
 const schedule = (i: number) => {
   const initial = 0.5;
@@ -69,125 +39,16 @@ const schedule = (i: number) => {
 };
 
 const runMnist = () => {
-  let currentTrainingResults: Result[] = [];
-
-  let now = Date.now();
   const options: OptimizerOptions = {
     learningRate: schedule,
-    maxIterations: iterations,
-    afterIteration(network, { loss }, i) {
-      const batch = generateBatch(trainData, BATCH_SIZE);
-      network.setData(batch);
-      if (i % 50 === 0) {
-        console.log("Took %d", (Date.now() - now) / 1000);
-      }
-      if (i % epochIterations === 0 || i === iterations) {
-        const testRes = validate(network, testData);
-        const trainRes = validate(network, trainData);
-        const result = {
-          iteration: i,
-          train: trainRes,
-          test: testRes,
-        };
-        currentTrainingResults.push(result);
-        console.log(result);
-      }
-    },
-    stopCondition: (_, { loss }) => {
-      return isNaN(loss);
-    },
+    epochs: EPOCHS,
   };
 
-  const initialBatch = generateBatch(trainData, BATCH_SIZE);
-  const network = new Network(initialBatch, "cross-entropy");
+  const network = new Network(trainData, testData, "cross-entropy");
   network.add("relu", 128);
   network.add("softmax", LABEL_SIZE);
 
-  const optimizers: { name: string; optimizer: Optimizer }[] = [
-    {
-      name: "sgd",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...options,
-        momentum: 0,
-        nesterov: false,
-      }),
-    },
-    {
-      name: "momentum",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...options,
-        momentum: 0.5,
-        nesterov: false,
-      }),
-    },
-    {
-      name: "nesterov",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...options,
-        momentum: 0.5,
-        nesterov: true,
-      }),
-    },
-    {
-      name: "AdaGrad",
-      optimizer: new AdaGradOptimizer(network, {
-        ...options,
-        learningRate: 0.01,
-      }),
-    },
-    {
-      name: "AdaDelta",
-      optimizer: new AdaDeltaOptimizer(network, {
-        ...options,
-        decay: 0.9,
-      }),
-    },
-    {
-      name: "RMSProp",
-      optimizer: new RMSPropOptimizer(network, {
-        ...options,
-        decay: 0.9,
-        learningRate: 0.001,
-      }),
-    },
-    {
-      name: "Adam",
-      optimizer: new AdamOptimizer(network, {
-        ...options,
-        momentDecay: 0.9,
-        gradientDecay: 0.999,
-        learningRate: 0.001,
-      }),
-    },
-  ];
-
-  const results: { optimizer: string; took: number; results: Result[] }[] = [];
-
-  for (const { name, optimizer } of optimizers) {
-    console.log("Start %s", name);
-    const start = Date.now();
-
-    network.initialize();
-    optimizer.optimize();
-
-    const took = (Date.now() - start) / 1000;
-    console.log("finished %s. Took %d", name, took);
-    results.push({ optimizer: name, results: currentTrainingResults, took });
-    currentTrainingResults = [];
-  }
-
-  for (const value of results) {
-    let min = value.results[0];
-    for (const res of value.results) {
-      if (res.test.loss < min.test.loss) {
-        min = res;
-      }
-    }
-    console.log(value.optimizer, min);
-  }
-
-  const fileName = `results-${new Date().toISOString()}.json`;
-  fs.writeFileSync(fileName, JSON.stringify(results));
+  runOptimizerComparison(network, options, "mnist");
 };
 
 export default runMnist;

@@ -1,15 +1,13 @@
 import fs from "fs";
-import { Result } from "./src/utils";
+import { EpochResult } from "./src/Optimizer";
 
 const data = [];
 for (let i = 1; i <= 3; i += 1) {
   const file = fs.readFileSync(`results-${i}.json`).toString();
   data.push(...JSON.parse(file));
 }
-const oldResults = fs.readFileSync(`results-old.json`).toString();
-data.push(...JSON.parse(oldResults).flat());
 
-type Data = { optimizer: string; results: Result[]; took: number };
+type Data = { optimizer: string; results: EpochResult[]; took: number };
 const results: Record<string, Data[]> = {};
 for (const d of data) {
   if (!results[d.optimizer]) {
@@ -28,8 +26,8 @@ for (const [optimizer, datas] of Object.entries(results)) {
     }
   }
   for (let i = 0; i < datas[0].results.length; i += 1) {
-    const avg: Result = {
-      iteration: datas[0].results[i].iteration,
+    const avg: EpochResult = {
+      took: 0,
       test: { loss: 0, percentage: 0 },
       train: { loss: 0, percentage: 0 },
     };

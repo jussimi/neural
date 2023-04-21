@@ -34,11 +34,11 @@ export class Layer {
   // Transposed weights array, where bias terms have been omitted.
   weightsTranspose: Matrix = Matrix.fromList([]);
 
-  activationKey: ActivationFunctionKey;
+  private activationKey: ActivationFunctionKey;
 
-  activation: ActivationFN;
+  private activation: ActivationFN;
 
-  private errorKey: ErrorFunctionKey = "cross-entropy";
+  private errorKey: ErrorFunctionKey;
 
   private error: ErrorFN = CELoss;
 
@@ -83,6 +83,9 @@ export class Layer {
     }
   }
 
+  /**
+   * Calculates the neuron sum, activation and the error (on output layer) for a given input-output pair.
+   */
   forwardPass = (input: Matrix, expected: Matrix): ForwardPassResult => {
     const sum = this.weights.multiply(input);
     const activated = this.activation.forward(sum, this.isOutput);
@@ -94,6 +97,9 @@ export class Layer {
     };
   };
 
+  /**
+   * Calculate the backwardpass for the given forward-pass-result and the next weights and deltas.
+   */
   backwardPass = (
     result: ForwardPassResult,
     deltaNext: Matrix,
@@ -106,6 +112,10 @@ export class Layer {
       .hadamard(this.activation.backward(result.sum), true);
   };
 
+  /**
+   * Calculate the output delta. Can be extended to use hard-coded activation/error pairs for a bit of a performance boost.
+   *  - Example of cross-entropy with softmax activation.
+   */
   outputPass = (result: ForwardPassResult, expected: Matrix) => {
     if (this.activationKey === "softmax") {
       if (this.errorKey !== "cross-entropy") {
@@ -119,11 +129,17 @@ export class Layer {
       .hadamard(this.activation.backward(result.sum), true);
   };
 
+  /**
+   * Set the weights of the layer. Also computes the transpose for later use.
+   */
   updateWeights = (weights: Matrix) => {
     this.weights = weights;
     this.weightsTranspose = weights.omit(0).transpose();
   };
 
+  /**
+   * Initializes the layer.
+   */
   initialize = (weights: Matrix, isOutput = false) => {
     this.isOutput = isOutput;
     this.updateWeights(weights);

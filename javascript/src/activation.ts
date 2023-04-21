@@ -1,25 +1,5 @@
 import { Matrix } from "./Matrix";
 
-export type ScalarActivationFN = {
-  forward: (x: number) => number;
-  backward: (x: number) => number;
-};
-
-const ScalarReLu: ScalarActivationFN = {
-  forward: (x) => (x > 0 ? x : 0),
-  backward: (x) => (x > 0 ? 1 : 0),
-};
-
-const ScalarTanH: ScalarActivationFN = {
-  forward: TanhFn,
-  backward: (x) => 1 - Math.pow(TanhFn(x), 2),
-};
-
-const ScalarSigmoid: ScalarActivationFN = {
-  forward: SigmoidFn,
-  backward: (x) => SigmoidFn(x) * (1 - SigmoidFn(x)),
-};
-
 export type ActivationFunctionKey = "sigmoid" | "tanh" | "relu" | "softmax";
 
 export type ActivationFN = {
@@ -56,6 +36,7 @@ export const Softmax: ActivationFN = {
     return result;
   },
   output: (sum, expected) => {
+    // Only works with cross-entropy.
     return sum.subtract(expected);
   },
   backward: (sum) => {
@@ -64,16 +45,52 @@ export const Softmax: ActivationFN = {
   },
 };
 
+/**
+ * Used for growing the dimension of the input layer.
+ */
 export const Identity: ActivationFN = {
   forward: (sum, isOutput) => activate((sum) => sum, sum, !isOutput),
-  backward: (sum) => activate((sum) => sum, sum, false),
-  output: (sum) => activate((sum) => sum, sum, false),
+  backward: (sum) => backpropagate((sum) => sum, sum),
+  output: (sum) => backpropagate((sum) => sum, sum),
 };
 
+/**
+ * A function from R -> R.
+ */
+export type ScalarActivationFN = {
+  forward: (x: number) => number;
+  backward: (x: number) => number;
+};
+
+const ScalarReLu: ScalarActivationFN = {
+  forward: (x) => (x > 0 ? x : 0),
+  backward: (x) => (x > 0 ? 1 : 0),
+};
+
+const ScalarTanH: ScalarActivationFN = {
+  forward: TanhFn,
+  backward: (x) => 1 - Math.pow(TanhFn(x), 2),
+};
+
+const ScalarSigmoid: ScalarActivationFN = {
+  forward: SigmoidFn,
+  backward: (x) => {
+    const s = SigmoidFn(x);
+    return s * (1 - s);
+  },
+};
+
+/**
+ * Generalizes a function derivative from R -> R to R^N -> R^N
+ */
 function backpropagate(fn: ScalarActivationFN["backward"], sum: Matrix) {
   return sum.map(fn);
 }
 
+/**
+ * Generalizes a function from R -> R to R^N -> R^N+1
+ *  - adds a constant 1 to the result if not the output layer.
+ */
 function activate(
   fn: ScalarActivationFN["forward"],
   sum: Matrix,

@@ -1,26 +1,10 @@
-import { DataSet, Network } from "../Network";
-import {
-  AdaDeltaOptimizer,
-  AdaGradOptimizer,
-  AdamOptimizer,
-  GradientDescentOptimizer,
-  Optimizer,
-  OptimizerOptions,
-  RMSPropOptimizer,
-} from "../Optimizer";
+import { Network } from "../Network";
+import { OptimizerOptions } from "../Optimizer";
 
 import fs from "fs";
-import { oneHotEncode, generateBatch, ValidationRes } from "../utils";
-
-const BATCH_SIZE = 100;
-const EPOCHS = 30;
-
-const schedule = (i: number) => {
-  const initial = 0.5;
-  const decay = 0.1;
-  const min = 0.05;
-  return Math.max(min, initial * (1 / (1 + decay * i)));
-};
+import { oneHotEncode } from "../utils";
+import { DatasetItem, Dataset } from "../Dataset";
+import { runOptimizerComparison } from "./shared";
 
 const [headers, ...rows] = fs
   .readFileSync("reservations.csv")
@@ -61,7 +45,7 @@ headers.forEach((h, i) => {
   }
 });
 
-const data: DataSet = rows
+const data: DatasetItem[] = rows
   .sort(() => Math.random() - 0.5)
   .map((values) => {
     const label: number[] = [];
@@ -90,129 +74,35 @@ const data: DataSet = rows
     return { input: result, output: label };
   });
 
-const splitIndex = Math.ceil(0.3 * data.length);
-const testData = data.slice(0, splitIndex);
-const trainData = data.slice(splitIndex);
+const BATCH_SIZE = 100;
+const EPOCHS = 30;
 
-const setSize = trainData.length;
-const epochIterations = Math.floor(setSize / BATCH_SIZE);
+const { train: trainData, test: testData } = Dataset.createTrainAndTest(
+  data,
+  BATCH_SIZE,
+  0.3
+);
 
-const iterations = epochIterations * EPOCHS;
-
-const validate = (nn: Network, data: DataSet): ValidationRes => {
-  let totalLoss = 0;
-  let correctCount = 0;
-
-  data.forEach((point) => {
-    const { loss, estimate } = nn.validate(point);
-    totalLoss += loss;
-    const result = Math.round(estimate.get(0, 0));
-    if (result === point.output[0]) {
-      correctCount += 1;
-    }
-  });
-  return {
-    loss: totalLoss / data.length,
-    percentage: correctCount / data.length,
-  };
+const schedule = (i: number) => {
+  const initial = 0.5;
+  const decay = 0.1;
+  const min = 0.05;
+  return Math.max(min, initial * (1 / (1 + decay * i)));
 };
 
 const runHotel = () => {
   const options: OptimizerOptions = {
     learningRate: schedule,
-    maxIterations: iterations,
-    afterIteration(network, { loss }, i) {
-      const batch = generateBatch(trainData, BATCH_SIZE);
-      network.setData(batch);
-      if (i % epochIterations === 0 || i === iterations) {
-        const testRes = validate(network, testData);
-        const trainRes = validate(network, trainData);
-        const result = {
-          iteration: i,
-          train: trainRes,
-          test: testRes,
-        };
-        console.log(result);
-      }
-    },
-    stopCondition: (_, { loss }) => {
-      return isNaN(loss);
-    },
+    epochs: EPOCHS,
   };
-  const initialBatch = generateBatch(trainData, BATCH_SIZE);
 
-  const network = new Network(initialBatch, "log-loss");
+  const network = new Network(trainData, testData, "log-loss");
   network.add("relu", 128);
+  network.add("relu", 64);
+  network.add("sigmoid", 32);
   network.add("sigmoid", 1);
 
-  const optimizers: { name: string; optimizer: Optimizer }[] = [
-    {
-      name: "sgd",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...options,
-        momentum: 0,
-        nesterov: false,
-      }),
-    },
-    {
-      name: "momentum",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...options,
-        momentum: 0.5,
-        nesterov: false,
-      }),
-    },
-    {
-      name: "nesterov",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...options,
-        momentum: 0.5,
-        nesterov: true,
-      }),
-    },
-    {
-      name: "AdaGrad",
-      optimizer: new AdaGradOptimizer(network, {
-        ...options,
-        learningRate: 0.01,
-      }),
-    },
-    {
-      name: "AdaDelta",
-      optimizer: new AdaDeltaOptimizer(network, {
-        ...options,
-        decay: 0.9,
-      }),
-    },
-    {
-      name: "RMSProp",
-      optimizer: new RMSPropOptimizer(network, {
-        ...options,
-        decay: 0.9,
-        learningRate: 0.001,
-      }),
-    },
-    {
-      name: "Adam",
-      optimizer: new AdamOptimizer(network, {
-        ...options,
-        momentDecay: 0.9,
-        gradientDecay: 0.999,
-        learningRate: 0.001,
-      }),
-    },
-  ];
-
-  for (const { name, optimizer } of optimizers) {
-    console.log("Start %s", name);
-    const start = Date.now();
-
-    network.initialize();
-    optimizer.optimize();
-
-    const took = (Date.now() - start) / 1000;
-    console.log("finished %s. Took %d", name, took);
-  }
+  runOptimizerComparison(network, options, "hotel");
 };
 
 export default runHotel;

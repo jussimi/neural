@@ -1,57 +1,80 @@
 import { ActivationFunctionKey, Identity } from "./activation";
+import { Dataset, DatasetItem } from "./Dataset";
 import { ErrorFunctionKey } from "./error";
 import { ForwardPassResult, Layer } from "./Layer";
 import { Matrix } from "./Matrix";
-import { randomWeights } from "./utils";
+import { isCorrectCategory, randomWeights } from "./utils";
 
-export type DataSet = { input: number[]; output: number[] }[];
+export type SetResult = {
+  loss: number;
+  percentage: number;
+};
+
 export class Network {
   error: ErrorFunctionKey;
-  dataset: DataSet;
+  currentBatch: DatasetItem[];
   layers: Layer[] = [];
 
-  constructor(dataset: DataSet, error: ErrorFunctionKey) {
-    this.dataset = dataset;
+  trainSet: Dataset;
+  testSet: Dataset | null;
+
+  constructor(
+    trainSet: Dataset,
+    testSet: Dataset | null,
+    error: ErrorFunctionKey
+  ) {
+    this.trainSet = trainSet;
+    this.testSet = testSet;
+    this.currentBatch = this.trainSet.generateBatch();
     this.error = error;
   }
 
-  setData = (dataset: DataSet) => {
-    this.dataset = dataset;
+  setBatch = (batch: DatasetItem[]) => {
+    this.currentBatch = batch;
   };
 
+  /**
+   * Calculates forward and backward passes for each item in the currentBatch.
+   *   - then calculates the total-loss and the gradient for weights.
+   */
   computeGradient = () => {
-    // Initialize empty weight-matrices.
+    // Initialize empty gradient-matrices.
     const totalGradient = this.layers.map((layer) => layer.weights.scale(0));
     let totalLoss = 0;
 
-    const results = this.dataset.map(({ input, output: expected }) => {
-      const result = this.computeResult(
+    const batchLen = this.currentBatch.length;
+
+    // Loop items in batch.
+    const results = this.currentBatch.map(({ input, output: expected }) => {
+      const data = this.computeResult(
         Matrix.fromList(input),
         Matrix.fromList(expected)
       );
+      const { activatedInput, deltas, loss, results } = data;
 
       // Update total gradient.
-      const { activatedInput, results } = result;
-      for (let l = 0; l < totalGradient.length; l += 1) {
-        const weights = totalGradient[l];
-        const activations = l === 0 ? activatedInput : results[l - 1].activated;
-        const delta = result.deltas[l];
+      for (let layer = 0; layer < totalGradient.length; layer += 1) {
+        const weights = totalGradient[layer];
+        const activations =
+          layer === 0 ? activatedInput : results[layer - 1].activated;
+        const delta = deltas[layer];
+
         for (let i = 0; i < weights.M; i += 1) {
           for (let j = 0; j < weights.N; j += 1) {
-            const diff = delta.get(i, 0) * activations.get(j, 0);
-            const newValue = weights.get(i, j) + diff / this.dataset.length;
+            const diff = (delta.get(i, 0) * activations.get(j, 0)) / batchLen;
+            const newValue = weights.get(i, j) + diff;
             weights.set(i, j, newValue);
           }
         }
       }
 
-      // Calculate total-loss.
-      totalLoss += result.loss / this.dataset.length;
+      // Update total-loss.
+      totalLoss += loss / batchLen;
 
       return {
         input,
         output: expected,
-        ...result,
+        ...data,
       };
     });
 
@@ -62,6 +85,9 @@ export class Network {
     };
   };
 
+  /**
+   * Calculates the backward and forward pass for a given input-output pair.
+   */
   computeResult = (realInput: Matrix, expected: Matrix) => {
     // Calculates neuron-sums and activations for each layer.
     const data = this.forwardPass(realInput, expected);
@@ -106,12 +132,12 @@ export class Network {
 
     const deltaOut = layerOut.outputPass(resultOut, expected);
 
-    // Store transposes of deltas -> avoids transposing the weight matrix.
     let deltas = [deltaOut];
+    // Loop layers in reverse order starting from the second to last layer.
+    //  - note that the next-delta is the first element in the deltas-array.
     for (let i = this.layers.length - 2; i >= 0; i -= 1) {
       const result = results[i];
 
-      // delta^(l+1) = deltas[0]
       const delta = this.layers[i].backwardPass(
         result,
         deltas[0],
@@ -123,15 +149,55 @@ export class Network {
     return deltas;
   };
 
-  validate = ({ input, output }: DataSet[1]) => {
+  /**
+   * Returns the forward-pass-result for an input-output pair.
+   *  - contains estimate and the loss for the estimate.
+   */
+  predict({ input, output }: DatasetItem) {
     return this.forwardPass(Matrix.fromList(input), Matrix.fromList(output));
-  };
+  }
 
-  add = (activation: ActivationFunctionKey, neuronCount: number) => {
+  /**
+   * Calculates the total-loss and prediction percentage for the whole dataset.
+   */
+  validateDataset(data: DatasetItem[]): SetResult {
+    let totalLoss = 0;
+    let correctCount = 0;
+
+    const error = this.error;
+
+    data.forEach((point) => {
+      const { loss, estimate } = this.predict(point);
+      totalLoss += loss;
+
+      if (error === "log-loss") {
+        const result = Math.round(estimate.get(0, 0));
+        if (result === point.output[0]) {
+          correctCount += 1;
+        }
+      } else if (error === "cross-entropy") {
+        if (isCorrectCategory(estimate, point.output)) {
+          correctCount += 1;
+        }
+      }
+    });
+    return {
+      loss: totalLoss / data.length,
+      percentage: correctCount / data.length,
+    };
+  }
+
+  /**
+   * Adds a new layer to the network.
+   */
+  add(activation: ActivationFunctionKey, neuronCount: number) {
     this.layers.push(new Layer(activation, neuronCount, this.error));
-  };
+  }
 
-  initialize = (weights?: number[][][]) => {
+  /**
+   * Initializes weights in the network. The weights can also given directly.
+   */
+  initialize(weights?: number[][][]) {
     if (!this.layers.length) throw new Error("You need to specify layers");
     if (weights && weights.length !== this.layers.length) {
       throw new Error(
@@ -140,7 +206,7 @@ export class Network {
     }
 
     // First dimension is based on the first input of the dataset.
-    let currentDimension = this.dataset[0].input.length;
+    let currentDimension = this.currentBatch[0].input.length;
     this.layers.map((layer, l) => {
       const m = layer.neuronCount;
       const n = currentDimension + 1;
@@ -159,5 +225,5 @@ export class Network {
       }
       layer.initialize(Matrix.fromArrays(w), l === this.layers.length - 1);
     });
-  };
+  }
 }

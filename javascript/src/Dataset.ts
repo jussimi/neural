@@ -3,6 +3,9 @@ export type DatasetItem = {
   output: number[];
 };
 
+/**
+ * Simple dataset class.
+ */
 export class Dataset {
   items: DatasetItem[];
 
@@ -32,17 +35,17 @@ export class Dataset {
     return set;
   }
 
-  setBatchSize(size: number) {
-    this.batchSize = size;
-  }
-
-  static createTrainAndTest(items: DatasetItem[], split: number) {
+  static createTrainAndTest(
+    items: DatasetItem[],
+    batchSize: number,
+    split: number
+  ) {
     const splitIndex = Math.ceil(split * items.length);
     const testData = items.slice(0, splitIndex);
     const trainData = items.slice(splitIndex);
 
     return {
-      train: new Dataset(trainData),
+      train: new Dataset(trainData, batchSize),
       test: new Dataset(testData),
     };
   }

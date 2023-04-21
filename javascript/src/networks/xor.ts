@@ -1,14 +1,15 @@
-import { DataSet, Network } from "../Network";
+import { Network } from "../Network";
+import { DatasetItem, Dataset } from "../Dataset";
 import { GradientDescentOptimizer } from "../Optimizer";
 
 const runXOR = () => {
-  const dataSet: DataSet = [
+  const dataSet: DatasetItem[] = [
     [[1, 1], 0],
     [[1, 0], 1],
     [[0, 1], 1],
     [[0, 0], 0],
   ].map((row) => {
-    return { input: row[0], output: [row[1]] } as DataSet[1];
+    return { input: row[0], output: [row[1]] } as DatasetItem;
   });
 
   const w1 = [
@@ -17,13 +18,13 @@ const runXOR = () => {
   ];
   const w2 = [[-0.5, 0.5, 0.5]];
 
-  const network = new Network(dataSet, "log-loss");
+  const network = new Network(new Dataset(dataSet), null, "log-loss");
   network.add("tanh", 2);
   network.add("sigmoid", 1);
 
   const gd = new GradientDescentOptimizer(network, {
     learningRate: 1,
-    maxIterations: 500,
+    epochs: 500 / dataSet.length,
     afterIteration: (_, { loss }, i) => {
       if (i % 20 === 0) {
         console.log("Iteration: ", i);
@@ -42,7 +43,6 @@ const runXOR = () => {
 
   network.initialize([w1, w2]);
   console.time();
-  network.initialize();
   gd.optimize();
   console.timeEnd();
 
