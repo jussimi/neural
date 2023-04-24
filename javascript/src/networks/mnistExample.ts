@@ -1,7 +1,7 @@
+import fs from "fs";
+
 import { Network } from "../Network";
 import { AdamOptimizer } from "../Optimizer";
-
-import fs from "fs";
 import { Dataset } from "../Dataset";
 import { oneHotEncode } from "../utils";
 
@@ -41,4 +41,6 @@ const optimizer = new AdamOptimizer(network, {
   learningRate: 0.001,
 });
 
-optimizer.optimize();
+const { results, took } = optimizer.optimize();
+console.log("Took %s", took);
+console.log("Accuracy: ", results[results.length - 1]);

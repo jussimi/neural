@@ -3,11 +3,17 @@ import { Dataset, DatasetItem } from "./Dataset";
 import { ErrorFunctionKey } from "./Error";
 import { ForwardPassResult, Layer } from "./Layer";
 import { Matrix } from "./Matrix";
-import { isCorrectCategory, randomWeights } from "./utils";
+import {
+  areaUnderCurve,
+  binaryClassificationAccuracy,
+  classificationAccuracy,
+} from "./metrics";
+import { isCorrectMultiCategory, randomWeights } from "./utils";
 
 export type SetResult = {
   loss: number;
   percentage: number;
+  auc: number;
 };
 
 export class Network {
@@ -29,8 +35,8 @@ export class Network {
     this.error = error;
   }
 
-  setBatch = (batch: DatasetItem[]) => {
-    this.currentBatch = batch;
+  generateBatch = () => {
+    this.currentBatch = this.trainSet.generateBatch();
   };
 
   /**
@@ -162,28 +168,30 @@ export class Network {
    */
   validateDataset(data: DatasetItem[]): SetResult {
     let totalLoss = 0;
-    let correctCount = 0;
 
     const error = this.error;
 
-    data.forEach((point) => {
+    const points = data.map((point) => {
       const { loss, estimate } = this.predict(point);
       totalLoss += loss;
-
-      if (error === "log-loss") {
-        const result = Math.round(estimate.get(0, 0));
-        if (result === point.output[0]) {
-          correctCount += 1;
-        }
-      } else if (error === "cross-entropy") {
-        if (isCorrectCategory(estimate, point.output)) {
-          correctCount += 1;
-        }
-      }
+      const items: number[] = [];
+      estimate.items.forEach((x) => items.push(x));
+      return { estimate: items, output: point.output };
     });
+
+    let percentage = 0;
+    let auc = 0;
+    if (error === "log-loss") {
+      auc = areaUnderCurve(points);
+      percentage = binaryClassificationAccuracy(points);
+    } else if (error === "cross-entropy") {
+      percentage = classificationAccuracy(points);
+    }
+
     return {
       loss: totalLoss / data.length,
-      percentage: correctCount / data.length,
+      percentage,
+      auc,
     };
   }
 

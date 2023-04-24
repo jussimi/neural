@@ -15,55 +15,55 @@ import fs from "fs";
 export const runOptimizerComparison = (
   network: Network,
   optimizerOpts: OptimizerOptions,
-  name: string
+  name: string | null
 ) => {
   const optimizers: { name: string; optimizer: Optimizer }[] = [
-    {
-      name: "sgd",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...optimizerOpts,
-        momentum: 0,
-        nesterov: false,
-      }),
-    },
-    {
-      name: "momentum",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...optimizerOpts,
-        momentum: 0.5,
-        nesterov: false,
-      }),
-    },
-    {
-      name: "nesterov",
-      optimizer: new GradientDescentOptimizer(network, {
-        ...optimizerOpts,
-        momentum: 0.5,
-        nesterov: true,
-      }),
-    },
-    {
-      name: "AdaGrad",
-      optimizer: new AdaGradOptimizer(network, {
-        ...optimizerOpts,
-        learningRate: 0.01,
-      }),
-    },
-    {
-      name: "AdaDelta",
-      optimizer: new AdaDeltaOptimizer(network, {
-        ...optimizerOpts,
-        decay: 0.9,
-      }),
-    },
-    {
-      name: "RMSProp",
-      optimizer: new RMSPropOptimizer(network, {
-        ...optimizerOpts,
-        decay: 0.9,
-        learningRate: 0.001,
-      }),
-    },
+    // {
+    //   name: "sgd",
+    //   optimizer: new GradientDescentOptimizer(network, {
+    //     ...optimizerOpts,
+    //     momentum: 0,
+    //     nesterov: false,
+    //   }),
+    // },
+    // {
+    //   name: "momentum",
+    //   optimizer: new GradientDescentOptimizer(network, {
+    //     ...optimizerOpts,
+    //     momentum: 0.5,
+    //     nesterov: false,
+    //   }),
+    // },
+    // {
+    //   name: "nesterov",
+    //   optimizer: new GradientDescentOptimizer(network, {
+    //     ...optimizerOpts,
+    //     momentum: 0.5,
+    //     nesterov: true,
+    //   }),
+    // },
+    // {
+    //   name: "AdaGrad",
+    //   optimizer: new AdaGradOptimizer(network, {
+    //     ...optimizerOpts,
+    //     learningRate: 0.01,
+    //   }),
+    // },
+    // {
+    //   name: "AdaDelta",
+    //   optimizer: new AdaDeltaOptimizer(network, {
+    //     ...optimizerOpts,
+    //     decay: 0.9,
+    //   }),
+    // },
+    // {
+    //   name: "RMSProp",
+    //   optimizer: new RMSPropOptimizer(network, {
+    //     ...optimizerOpts,
+    //     decay: 0.9,
+    //     learningRate: 0.001,
+    //   }),
+    // },
     {
       name: "Adam",
       optimizer: new AdamOptimizer(network, {
@@ -100,6 +100,8 @@ export const runOptimizerComparison = (
     console.log(value.optimizer, min);
   }
 
-  const fileName = `${name}-${new Date().toISOString()}.json`;
-  fs.writeFileSync(fileName, JSON.stringify(results));
+  if (name !== null) {
+    const fileName = `${name}-${new Date().toISOString()}.json`;
+    fs.writeFileSync(fileName, JSON.stringify(results));
+  }
 };

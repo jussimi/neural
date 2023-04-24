@@ -26,7 +26,7 @@ headers.forEach((h, i) => {
     }
   }
 
-  const isPossiblyCategorical = values.length < 40 && !h.startsWith("no_");
+  const isPossiblyCategorical = values.length < 40;
   const firstValueAsNumber = parseFloat(values[0]);
   if (isPossiblyCategorical) {
     const labelMap = new Map();
@@ -45,43 +45,57 @@ headers.forEach((h, i) => {
   }
 });
 
-const data: DatasetItem[] = rows
-  .sort(() => Math.random() - 0.5)
-  .map((values) => {
-    const label: number[] = [];
-    const result: number[] = [];
-    values.forEach((val, i) => {
-      const header = headers[i];
-      if (header === "booking_status") {
-        const value = distinctValues[header].get(val);
-        if (typeof value !== "number") throw new Error("invalid status");
-        label.push(value);
-        return;
-      }
-      const isNumerical = typeof maxValues[header] === "number";
-      if (isNumerical) {
-        result.push(parseFloat(val) / maxValues[header]);
-        return;
-      }
-      const isCategorical = typeof distinctValues[header] !== "undefined";
-      if (isCategorical) {
-        const size = distinctValues[header].size;
-        const value = distinctValues[header].get(val);
-        if (typeof value !== "number") throw new Error("invalid value!");
-        result.push(...oneHotEncode(value, size));
-      }
-    });
-    return { input: result, output: label };
+console.log(maxValues);
+console.log(distinctValues);
+
+const data: DatasetItem[] = rows.map((values) => {
+  const label: number[] = [];
+  const result: number[] = [];
+  values.forEach((val, i) => {
+    const header = headers[i];
+    if (header === "booking_status") {
+      const value = distinctValues[header].get(val);
+      if (typeof value !== "number") throw new Error("invalid status");
+      label.push(value);
+      return;
+    }
+    const isNumerical = typeof maxValues[header] === "number";
+    if (isNumerical) {
+      result.push(parseFloat(val) / maxValues[header]);
+      return;
+    }
+    const isCategorical = typeof distinctValues[header] !== "undefined";
+    if (isCategorical) {
+      const size = distinctValues[header].size;
+      const value = distinctValues[header].get(val);
+      if (typeof value !== "number") throw new Error("invalid value!");
+      result.push(...oneHotEncode(value, size));
+    }
   });
+  return { input: result, output: label };
+});
 
-const BATCH_SIZE = 100;
-const EPOCHS = 30;
+const isCancelled = data.filter((d) => d.output[0] === 1);
+const notCancelled = data.filter((d) => d.output[0] === 0);
 
-const { train: trainData, test: testData } = Dataset.createTrainAndTest(
-  data,
-  BATCH_SIZE,
-  0.3
-);
+const split = 0.3;
+const isCancelledSplit = Dataset.createTrainAndTest(isCancelled, 1, split);
+const notCancelledSplit = Dataset.createTrainAndTest(notCancelled, 1, split);
+
+const BATCH_SIZE = 50;
+const EPOCHS = 20;
+
+const trainItems = [
+  ...isCancelledSplit.train.items,
+  ...notCancelledSplit.train.items,
+];
+
+const trainData = new Dataset(trainItems, BATCH_SIZE);
+
+const testData = new Dataset([
+  ...isCancelledSplit.test.items,
+  ...notCancelledSplit.test.items,
+]);
 
 const schedule = (i: number) => {
   const initial = 0.5;
@@ -97,9 +111,8 @@ const runHotel = () => {
   };
 
   const network = new Network(trainData, testData, "log-loss");
+  network.add("relu", 256);
   network.add("relu", 128);
-  network.add("relu", 64);
-  network.add("sigmoid", 32);
   network.add("sigmoid", 1);
 
   runOptimizerComparison(network, options, "hotel");

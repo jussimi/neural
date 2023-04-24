@@ -43,7 +43,7 @@ const runXOR = () => {
 
   network.initialize([w1, w2]);
   console.time();
-  gd.optimize();
+  gd.optimize(false);
   console.timeEnd();
 
   console.log("\n");

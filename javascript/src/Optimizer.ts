@@ -13,12 +13,16 @@ export type OptimizerOptions = {
   learningRate: LearningRate;
   beforeIteration?: (network: Network, iteration: number) => void;
   afterIteration?: OptimizerOptionFN<void>;
+  afterEpoch?: (epoch: number) => void;
   stopCondition?: OptimizerOptionFN<boolean>;
   afterAll?: () => void;
 };
 
 export type Optimizer = {
-  optimize: () => { results: EpochResult[]; took: number };
+  optimize: (shouldInitialize?: boolean) => {
+    results: EpochResult[];
+    took: number;
+  };
 } & OptimizerOptions;
 
 type LearningRate = number | ((iteration: number) => number);
@@ -38,8 +42,9 @@ class BaseOptimizer implements Optimizer {
   afterIteration: OptimizerOptions["afterIteration"];
   stopCondition: OptimizerOptions["stopCondition"];
   afterAll?: OptimizerOptions["afterAll"];
+  afterEpoch?: OptimizerOptions["afterEpoch"];
 
-  doUpdate: (
+  updateWeights: (
     learningRate: number,
     data: OptimizationState,
     iteration: number
@@ -54,6 +59,7 @@ class BaseOptimizer implements Optimizer {
     this.afterIteration = options.afterIteration;
     this.stopCondition = options.stopCondition;
     this.afterAll = options.afterAll;
+    this.afterEpoch = options.afterEpoch;
   }
 
   computeGradients = () => {
@@ -64,8 +70,10 @@ class BaseOptimizer implements Optimizer {
     };
   };
 
-  optimize: Optimizer["optimize"] = () => {
-    this.network.initialize();
+  optimize: Optimizer["optimize"] = (shouldInitialize = true) => {
+    if (shouldInitialize) {
+      this.network.initialize();
+    }
 
     const trainSet = this.network.trainSet;
     const testSet = this.network.testSet;
@@ -75,7 +83,7 @@ class BaseOptimizer implements Optimizer {
     const trainStart = Date.now();
     const results: EpochResult[] = [];
 
-    const validateSets = (epochStart: number) => {
+    const validateSets = (epochStart: number, initial = false) => {
       const trainRes = this.network.validateDataset(trainSet.items);
       const testRes = this.network.validateDataset(testSet?.items || []);
       const result: EpochResult = {
@@ -83,12 +91,12 @@ class BaseOptimizer implements Optimizer {
         test: testRes,
         took: Date.now() - epochStart,
       };
-      console.log();
-      console.log(result);
+      console.log(initial ? "Initial score:" : "");
+      console.log(JSON.stringify(result));
       results.push(result);
     };
 
-    validateSets(trainStart);
+    validateSets(trainStart, true);
 
     let lastLog = Date.now();
     outer: for (let epoch = 0; epoch < this.epochs; epoch += 1) {
@@ -130,15 +138,15 @@ class BaseOptimizer implements Optimizer {
         }
 
         // STEP 2: Calls the update function of the optimizer.
-        this.doUpdate(lr, data, i);
+        this.updateWeights(lr, data, i);
 
         this.afterIteration?.(this.network, data, i);
 
         // STEP 3: Create a new batch of data.
-        const batch = this.network.trainSet.generateBatch();
-        this.network.setBatch(batch);
+        this.network.generateBatch();
       }
       validateSets(start);
+      this.afterEpoch?.(epoch);
     }
     const took = (Date.now() - trainStart) / 1000;
 
@@ -174,7 +182,7 @@ export class GradientDescentOptimizer extends BaseOptimizer {
       };
     }
 
-    this.doUpdate = (learningRate, data) => {
+    this.updateWeights = (learningRate, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -213,7 +221,7 @@ export class AdaGradOptimizer extends BaseOptimizer {
   constructor(network: Network, options: OptimizerOptions) {
     super(network, options);
 
-    this.doUpdate = (learningRate, data) => {
+    this.updateWeights = (learningRate, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -258,7 +266,7 @@ export class AdaDeltaOptimizer extends BaseOptimizer {
 
     this.decay = options.decay;
 
-    this.doUpdate = (_, data) => {
+    this.updateWeights = (_, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -310,7 +318,7 @@ export class RMSPropOptimizer extends BaseOptimizer {
 
     this.decay = options.decay;
 
-    this.doUpdate = (learningRate, data) => {
+    this.updateWeights = (learningRate, data) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);
@@ -358,7 +366,7 @@ export class AdamOptimizer extends BaseOptimizer {
     this.gradientDecay = options.gradientDecay;
     this.momentDecay = options.momentDecay;
 
-    this.doUpdate = (learningRate, data, iteration) => {
+    this.updateWeights = (learningRate, data, iteration) => {
       const { gradients } = data;
       if (!this.initialized) {
         this.initialize(gradients);

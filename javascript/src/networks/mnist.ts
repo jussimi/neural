@@ -46,6 +46,8 @@ const runMnist = () => {
 
   const network = new Network(trainData, testData, "cross-entropy");
   network.add("relu", 128);
+  network.add("relu", 64);
+  network.add("relu", 32);
   network.add("softmax", LABEL_SIZE);
 
   runOptimizerComparison(network, options, "mnist");

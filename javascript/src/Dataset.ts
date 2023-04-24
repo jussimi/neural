@@ -12,7 +12,7 @@ export class Dataset {
   batchSize: number;
 
   constructor(items: DatasetItem[], batchSize: number | undefined = undefined) {
-    this.items = items;
+    this.items = [...items].sort(() => Math.random() - 0.5);
     this.batchSize = batchSize || items.length;
   }
 
